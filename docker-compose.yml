@@ -42,6 +42,12 @@ services:
           sleep 5
         done
 
+        echo "Syncing custom app into active Nextcloud volume..."
+        mkdir -p /var/www/html/custom_apps
+        rm -rf /var/www/html/custom_apps/booked_events_widget
+        cp -a /usr/src/nextcloud/custom_apps/booked_events_widget /var/www/html/custom_apps/booked_events_widget
+        chown -R www-data:www-data /var/www/html/custom_apps/booked_events_widget
+
         echo "Enabling dashboard widget app..."
         occ app:disable booked_events_widget || true
         occ app:enable booked_events_widget

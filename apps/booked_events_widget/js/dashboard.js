@@ -12,7 +12,6 @@
 				<div class="bew-event__title">${event.title}</div>
 				<div class="bew-event__meta">${event.location}</div>
 			</div>
-			<div class="bew-event__status">${event.status}</div>
 		</li>
 	`
 
@@ -23,7 +22,6 @@
 			el.style.flexDirection = 'column'
 			el.style.overflow = 'hidden'
 
-			const summary = `${events.length} bokade event`
 			const markup = events.length === 0
 				? '<div class="bew-empty">Inga bokade event.</div>'
 				: `<ul class="bew-list">${events.map(renderEvent).join('')}</ul>`
@@ -35,9 +33,6 @@
 							<div class="bew-widget__eyebrow">Eventplanering</div>
 							<div class="bew-widget__intro">Kommande bokningar for demoorganisationen.</div>
 						</div>
-						<div class="bew-widget__count">${summary}</div>
-					</div>
-					<div class="bew-widget__toolbar">
 						<a class="bew-widget__link" href="${manageUrl}">Hantera event</a>
 					</div>
 					${markup}
