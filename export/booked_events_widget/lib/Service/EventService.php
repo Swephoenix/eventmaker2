@@ -4,46 +4,27 @@ declare(strict_types=1);
 
 namespace OCA\BookedEventsWidget\Service;
 
-use OCP\DB\QueryBuilder\IQueryBuilder;
-use OCP\IDBConnection;
+use OCA\BookedEventsWidget\AppInfo\Application;
 
 class EventService {
-	private const TABLE = 'bew_events';
-
-	public function __construct(
-		private IDBConnection $db,
-	) {
-	}
-
 	/**
 	 * @return list<array<string, int|string>>
 	 */
 	public function getEventsWithIds(): array {
-		if (!$this->hasAnyEvents()) {
-			$this->seedEvents($this->getDefaultEvents());
-		}
-
-		$query = $this->db->getQueryBuilder();
-		$query->select('id', 'title', 'event_date', 'location', 'status', 'sort_order')
-			->from(self::TABLE)
-			->orderBy('event_date', 'ASC')
-			->addOrderBy('sort_order', 'ASC');
-
-		$result = $query->executeQuery();
 		$events = [];
 
-		while ($row = $result->fetch()) {
-			$events[] = [
-				'id' => (int)$row['id'],
-				'title' => (string)$row['title'],
-				'date' => (string)$row['event_date'],
-				'location' => (string)$row['location'],
-				'status' => (string)$row['status'],
-				'sort_order' => (int)$row['sort_order'],
-			];
+		foreach ($this->readRawEvents() as $index => $event) {
+			$events[] = $this->normalizeEvent($event, $index);
 		}
 
-		$result->closeCursor();
+		usort($events, static function (array $left, array $right): int {
+			$sortComparison = ((int)$left['sort_order']) <=> ((int)$right['sort_order']);
+			if ($sortComparison !== 0) {
+				return $sortComparison;
+			}
+
+			return ((int)$left['id']) <=> ((int)$right['id']);
+		});
 
 		return $events;
 	}
@@ -56,65 +37,180 @@ class EventService {
 			'title' => (string)$event['title'],
 			'date' => (string)$event['date'],
 			'location' => (string)$event['location'],
-			'status' => (string)$event['status'],
+			'description' => (string)$event['description'],
+			'link' => (string)$event['link'],
 		], $this->getEventsWithIds());
 	}
 
 	public function hasAnyEvents(): bool {
-		$query = $this->db->getQueryBuilder();
-		$query->select($query->func()->count('*', 'count'))
-			->from(self::TABLE);
-
-		$count = (int)$query->executeQuery()->fetchOne();
-
-		return $count > 0;
+		return $this->readRawEvents() !== [];
 	}
 
 	/**
 	 * @param list<array<string, int|string>> $events
 	 */
 	public function seedEvents(array $events): void {
-		foreach ($events as $event) {
-			$this->createEvent(
-				(string)$event['title'],
-				(string)$event['date'],
-				(string)$event['location'],
-				(string)$event['status'],
-				(int)$event['sort_order'],
-			);
+		$this->writeRawEvents(array_map(function (array $event): array {
+			return [
+				'title' => (string)$event['title'],
+				'date' => (string)$event['date'],
+				'location' => (string)$event['location'],
+				'description' => (string)($event['description'] ?? ''),
+				'link' => (string)($event['link'] ?? ''),
+				'sort_order' => (int)($event['sort_order'] ?? 0),
+			];
+		}, $events));
+	}
+
+	public function createEvent(string $title, string $date, string $location, string $description, string $link, int $sortOrder): void {
+		$events = $this->readRawEvents();
+		$events[] = [
+			'title' => trim($title),
+			'date' => trim($date),
+			'location' => trim($location),
+			'description' => trim($description),
+			'link' => trim($link),
+			'sort_order' => $sortOrder,
+		];
+
+		$this->writeRawEvents($events);
+	}
+
+	public function updateEvent(int $id, string $title, string $date, string $location, string $description, string $link, int $sortOrder): void {
+		$events = $this->readRawEvents();
+
+		if (!isset($events[$id])) {
+			return;
 		}
-	}
 
-	public function createEvent(string $title, string $date, string $location, string $status, int $sortOrder): void {
-		$query = $this->db->getQueryBuilder();
-		$query->insert(self::TABLE)
-			->values([
-				'title' => $query->createNamedParameter($title, IQueryBuilder::PARAM_STR),
-				'event_date' => $query->createNamedParameter($date, IQueryBuilder::PARAM_STR),
-				'location' => $query->createNamedParameter($location, IQueryBuilder::PARAM_STR),
-				'status' => $query->createNamedParameter($status, IQueryBuilder::PARAM_STR),
-				'sort_order' => $query->createNamedParameter($sortOrder, IQueryBuilder::PARAM_INT),
-			])
-			->executeStatement();
-	}
+		$events[$id] = [
+			'title' => trim($title),
+			'date' => trim($date),
+			'location' => trim($location),
+			'description' => trim($description),
+			'link' => trim($link),
+			'sort_order' => $sortOrder,
+		];
 
-	public function updateEvent(int $id, string $title, string $date, string $location, string $status, int $sortOrder): void {
-		$query = $this->db->getQueryBuilder();
-		$query->update(self::TABLE)
-			->set('title', $query->createNamedParameter($title, IQueryBuilder::PARAM_STR))
-			->set('event_date', $query->createNamedParameter($date, IQueryBuilder::PARAM_STR))
-			->set('location', $query->createNamedParameter($location, IQueryBuilder::PARAM_STR))
-			->set('status', $query->createNamedParameter($status, IQueryBuilder::PARAM_STR))
-			->set('sort_order', $query->createNamedParameter($sortOrder, IQueryBuilder::PARAM_INT))
-			->where($query->expr()->eq('id', $query->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
-			->executeStatement();
+		$this->writeRawEvents($events);
 	}
 
 	public function deleteEvent(int $id): void {
-		$query = $this->db->getQueryBuilder();
-		$query->delete(self::TABLE)
-			->where($query->expr()->eq('id', $query->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
-			->executeStatement();
+		$events = $this->readRawEvents();
+
+		if (!isset($events[$id])) {
+			return;
+		}
+
+		unset($events[$id]);
+
+		$this->writeRawEvents(array_values($events));
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	private function readRawEvents(): array {
+		$filePath = $this->getEventsFilePath();
+		if (!is_file($filePath)) {
+			return $this->getDefaultEvents();
+		}
+
+		$contents = file_get_contents($filePath);
+		if ($contents === false) {
+			return $this->getDefaultEvents();
+		}
+
+		$events = json_decode($contents, true);
+		if (!is_array($events)) {
+			return $this->getDefaultEvents();
+		}
+
+		$events = array_values(array_filter($events, static fn ($event): bool => is_array($event)));
+
+		return $events !== [] ? $events : $this->getDefaultEvents();
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $events
+	 */
+	private function writeRawEvents(array $events): void {
+		$filePath = $this->getEventsFilePath();
+		$directory = dirname($filePath);
+
+		if (!is_dir($directory)) {
+			mkdir($directory, 0775, true);
+		}
+
+		file_put_contents(
+			$filePath,
+			(string)json_encode(array_values($events), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+		);
+	}
+
+	/**
+	 * @param array<string, mixed> $event
+	 * @return array<string, int|string>
+	 */
+	private function normalizeEvent(array $event, int $index): array {
+		$title = $this->cleanText((string)($event['title'] ?? 'Event'));
+		$date = $this->cleanText((string)($event['date'] ?? ''));
+		$month = $this->cleanText((string)($event['month'] ?? ''));
+		$day = $this->cleanText((string)($event['day'] ?? ''));
+		$time = $this->cleanText((string)($event['time'] ?? ''));
+		$place = $this->cleanText((string)($event['place'] ?? ''));
+		$location = $this->cleanText((string)($event['location'] ?? ''));
+		$description = $this->cleanText((string)($event['description'] ?? ''));
+		$link = trim((string)($event['link'] ?? ''));
+
+		if ($date === '') {
+			$date = trim($month . ' ' . $day);
+		}
+		if ($date === '') {
+			$date = 'Datum meddelas';
+		}
+
+		if ($location === '') {
+			$location = $place;
+		}
+		if ($location !== '' && $time !== '') {
+			$location .= ' • ' . $time;
+		} elseif ($location === '' && $time !== '') {
+			$location = $time;
+		}
+		if ($location === '') {
+			$location = 'Plats meddelas';
+		}
+
+		if ($description === '') {
+			$description = sprintf(
+				'%s planeras till %s. %s',
+				$title,
+				mb_strtolower($date),
+				$link !== '' ? 'Öppna länken för mer information.' : 'Mer information kommer senare.',
+			);
+		}
+
+		return [
+			'id' => $index,
+			'title' => $title,
+			'date' => $date,
+			'location' => $location,
+			'description' => $description,
+			'link' => $link,
+			'sort_order' => (int)($event['sort_order'] ?? (($index + 1) * 10)),
+		];
+	}
+
+	private function cleanText(string $value): string {
+		$value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+		$value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+
+		return trim($value);
+	}
+
+	private function getEventsFilePath(): string {
+		return \OC::$SERVERROOT . '/custom_apps/' . Application::APP_ID . '/data/events.json';
 	}
 
 	/**
@@ -123,31 +219,35 @@ class EventService {
 	private function getDefaultEvents(): array {
 		return [
 			[
-				'title' => 'Sommarfest pa Tjoloholm',
-				'date' => '2026-06-12',
-				'location' => 'Kungsbacka',
-				'status' => 'Bekraftad',
+				'title' => 'Årsstämma',
+				'date' => 'Datum meddelas',
+				'location' => 'Information via medlemsmejl',
+				'description' => 'Information om årsstämman skickas ut via medlemsmejl när program och plats är fastställda.',
+				'link' => '',
 				'sort_order' => 10,
 			],
 			[
-				'title' => 'Styrelsemiddag Q2',
-				'date' => '2026-05-21',
-				'location' => 'Grand Hotel',
-				'status' => 'Meny vald',
+				'title' => 'Seniorfestival Malmö',
+				'date' => 'Kommande datum',
+				'location' => 'Malmö',
+				'description' => 'Seniorfestivalen samlar aktiviteter, inspiration och utställare för en aktiv och social vardag.',
+				'link' => 'https://seniorfestivalen.se/malmo/',
 				'sort_order' => 20,
 			],
 			[
-				'title' => 'Produktlansering Nord',
-				'date' => '2026-09-04',
-				'location' => 'Stockholm Waterfront',
-				'status' => 'Planering klar',
+				'title' => 'Afterwork med Ambition Sverige',
+				'date' => 'Kommande datum',
+				'location' => 'RG21',
+				'description' => 'Ett informellt tillfälle att träffas, nätverka och prata vidare om kommande aktiviteter.',
+				'link' => 'https://rg21.se/',
 				'sort_order' => 30,
 			],
 			[
-				'title' => 'Julmingel Goteborg',
-				'date' => '2026-12-03',
-				'location' => 'Magasinsgatan',
-				'status' => 'Bokad lokal',
+				'title' => 'Seniordagen',
+				'date' => 'Kommande datum',
+				'location' => 'Kungsträdgården',
+				'description' => 'En dag fylld av utställare, föreläsningar och aktiviteter som inspirerar till en bättre framtid för seniorer.',
+				'link' => 'https://seniordagen.com/seniordagen-i-stockholm/index',
 				'sort_order' => 40,
 			],
 		];

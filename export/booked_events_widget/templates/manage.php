@@ -25,15 +25,19 @@ style('booked_events_widget', 'manage');
 			</label>
 			<label class="bew-field">
 				<span>Datum</span>
-				<input type="date" name="date" required>
+				<input type="text" name="date" required>
 			</label>
 			<label class="bew-field">
 				<span>Plats</span>
 				<input type="text" name="location" required>
 			</label>
 			<label class="bew-field">
-				<span>Status</span>
-				<input type="text" name="status" required>
+				<span>Popuptext</span>
+				<textarea name="description" rows="4"></textarea>
+			</label>
+			<label class="bew-field">
+				<span>Länk</span>
+				<input type="url" name="link">
 			</label>
 			<label class="bew-field">
 				<span>Sortering</span>
@@ -58,15 +62,19 @@ style('booked_events_widget', 'manage');
 						</label>
 						<label class="bew-field">
 							<span>Datum</span>
-							<input type="date" name="date" value="<?php p((string)$event['date']); ?>" required>
+							<input type="text" name="date" value="<?php p((string)$event['date']); ?>" required>
 						</label>
 						<label class="bew-field">
 							<span>Plats</span>
 							<input type="text" name="location" value="<?php p((string)$event['location']); ?>" required>
 						</label>
 						<label class="bew-field">
-							<span>Status</span>
-							<input type="text" name="status" value="<?php p((string)$event['status']); ?>" required>
+							<span>Popuptext</span>
+							<textarea name="description" rows="4"><?php p((string)$event['description']); ?></textarea>
+						</label>
+						<label class="bew-field">
+							<span>Länk</span>
+							<input type="url" name="link" value="<?php p((string)$event['link']); ?>">
 						</label>
 						<label class="bew-field">
 							<span>Sortering</span>
