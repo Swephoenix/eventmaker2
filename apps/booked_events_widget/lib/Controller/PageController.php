@@ -50,12 +50,13 @@ class PageController extends Controller {
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function create(string $title, string $date, string $location, string $status, int $sort_order = 0): RedirectResponse {
+	public function create(string $title, string $date, string $location, string $description = '', string $link = '', int $sort_order = 0): RedirectResponse {
 		$this->eventService->createEvent(
 			trim($title),
 			$date,
 			trim($location),
-			trim($status),
+			trim($description),
+			trim($link),
 			$sort_order,
 		);
 
@@ -64,13 +65,14 @@ class PageController extends Controller {
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function update(int $id, string $title, string $date, string $location, string $status, int $sort_order = 0): RedirectResponse {
+	public function update(int $id, string $title, string $date, string $location, string $description = '', string $link = '', int $sort_order = 0): RedirectResponse {
 		$this->eventService->updateEvent(
 			$id,
 			trim($title),
 			$date,
 			trim($location),
-			trim($status),
+			trim($description),
+			trim($link),
 			$sort_order,
 		);
 

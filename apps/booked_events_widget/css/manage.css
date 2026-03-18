@@ -72,7 +72,7 @@
 }
 
 .bew-form--create {
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(6, minmax(0, 1fr));
 	align-items: end;
 }
 
@@ -89,7 +89,8 @@
 	letter-spacing: 0.04em;
 }
 
-.bew-field input {
+.bew-field input,
+.bew-field textarea {
 	width: 100%;
 	min-height: 42px;
 	padding: 10px 12px;
@@ -97,6 +98,11 @@
 	border: 1px solid rgba(112, 163, 196, 0.35);
 	background: rgba(255, 255, 255, 0.95);
 	box-sizing: border-box;
+}
+
+.bew-field textarea {
+	resize: vertical;
+	min-height: 120px;
 }
 
 .bew-actions,

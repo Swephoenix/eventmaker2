@@ -43,9 +43,18 @@ services:
         done
 
         echo "Syncing custom app into active Nextcloud volume..."
+        TMP_EVENTS_FILE="/tmp/booked_events_widget_events.json"
+        if [ -f /var/www/html/custom_apps/booked_events_widget/data/events.json ]; then
+          cp /var/www/html/custom_apps/booked_events_widget/data/events.json "$$TMP_EVENTS_FILE"
+        fi
+
         mkdir -p /var/www/html/custom_apps
         rm -rf /var/www/html/custom_apps/booked_events_widget
         cp -a /usr/src/nextcloud/custom_apps/booked_events_widget /var/www/html/custom_apps/booked_events_widget
+        if [ -f "$$TMP_EVENTS_FILE" ]; then
+          mkdir -p /var/www/html/custom_apps/booked_events_widget/data
+          mv "$$TMP_EVENTS_FILE" /var/www/html/custom_apps/booked_events_widget/data/events.json
+        fi
         chown -R www-data:www-data /var/www/html/custom_apps/booked_events_widget
 
         echo "Enabling dashboard widget app..."
@@ -63,6 +72,25 @@ services:
         occ user:setting demo dashboard layout booked_events_widget-events,calendar,files
 
         echo "Initialization complete."
+    volumes:
+      - nextcloud_data:/var/www/html
+
+  events-updater:
+    image: nc-eventplaner-nextcloud:local
+    depends_on:
+      - nextcloud
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        set -euo pipefail
+
+        while true; do
+          echo "Updating event feed..."
+          /usr/local/bin/getevent.sh /var/www/html/custom_apps/booked_events_widget/data/events.json || true
+          sleep 1800
+        done
     volumes:
       - nextcloud_data:/var/www/html
 

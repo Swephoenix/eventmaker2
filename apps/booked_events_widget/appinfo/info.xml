@@ -4,7 +4,7 @@
   <name>Booked Events Widget</name>
   <summary>Minimal dashboard-widget som visar bokade event.</summary>
   <description>Visar en enkel lista med bokade event direkt på Nextcloud-dashboarden.</description>
-  <version>1.1.1</version>
+  <version>1.1.2</version>
   <licence>agpl</licence>
   <author>Codex</author>
   <namespace>BookedEventsWidget</namespace>
