@@ -1,0 +1,150 @@
+.bew-manage {
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 32px 20px 48px;
+	display: grid;
+	gap: 24px;
+}
+
+.bew-manage__hero {
+	padding: 28px 32px;
+	border-radius: 24px;
+	background: linear-gradient(135deg, #0c5f94, #1b89c8 55%, #8dd7f4);
+	color: #fff;
+	box-shadow: 0 18px 40px rgba(5, 41, 66, 0.18);
+}
+
+.bew-manage__eyebrow {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	opacity: 0.78;
+	margin-bottom: 10px;
+}
+
+.bew-manage__title {
+	margin: 0 0 8px;
+	font-size: 34px;
+	line-height: 1.1;
+}
+
+.bew-manage__intro {
+	margin: 0;
+	max-width: 52ch;
+	font-size: 15px;
+	line-height: 1.5;
+	opacity: 0.92;
+}
+
+.bew-panel {
+	background: rgba(255, 255, 255, 0.92);
+	border: 1px solid rgba(145, 189, 216, 0.28);
+	border-radius: 24px;
+	padding: 24px;
+	box-shadow: 0 18px 36px rgba(9, 43, 68, 0.1);
+}
+
+.bew-panel__header h2 {
+	margin: 0 0 18px;
+	font-size: 20px;
+}
+
+.bew-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 16px;
+}
+
+.bew-card {
+	padding: 18px;
+	border-radius: 18px;
+	background: linear-gradient(160deg, rgba(232, 244, 252, 0.92), rgba(255, 255, 255, 0.98));
+	border: 1px solid rgba(130, 180, 212, 0.26);
+	display: grid;
+	gap: 14px;
+}
+
+.bew-form {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
+
+.bew-form--create {
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	align-items: end;
+}
+
+.bew-field {
+	display: grid;
+	gap: 6px;
+}
+
+.bew-field span {
+	font-size: 12px;
+	font-weight: 700;
+	color: #4d6679;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.bew-field input {
+	width: 100%;
+	min-height: 42px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid rgba(112, 163, 196, 0.35);
+	background: rgba(255, 255, 255, 0.95);
+	box-sizing: border-box;
+}
+
+.bew-actions,
+.bew-delete {
+	display: flex;
+	align-items: end;
+}
+
+.bew-button {
+	min-height: 42px;
+	padding: 0 16px;
+	border-radius: 999px;
+	border: 0;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.bew-button--primary {
+	background: #0f75b3;
+	color: #fff;
+}
+
+.bew-button--danger {
+	background: #d54747;
+	color: #fff;
+}
+
+@media (max-width: 900px) {
+	.bew-form--create {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 640px) {
+	.bew-manage {
+		padding: 20px 14px 36px;
+	}
+
+	.bew-panel {
+		padding: 18px;
+	}
+
+	.bew-form,
+	.bew-form--create {
+		grid-template-columns: 1fr;
+	}
+
+	.bew-manage__title {
+		font-size: 28px;
+	}
+}

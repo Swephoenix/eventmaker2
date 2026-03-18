@@ -1,0 +1,64 @@
+services:
+  nextcloud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nc-eventplaner-nextcloud:local
+    container_name: nc-eventplaner
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: admin123
+      SQLITE_DATABASE: nextcloud
+      NEXTCLOUD_TRUSTED_DOMAINS: localhost 127.0.0.1
+    volumes:
+      - nextcloud_data:/var/www/html
+
+  nextcloud-init:
+    image: nc-eventplaner-nextcloud:local
+    depends_on:
+      - nextcloud
+    restart: "no"
+    environment:
+      OC_PASS: DemoUser123!
+    entrypoint: /bin/bash
+    command:
+      - -lc
+      - |
+        set -euo pipefail
+
+        occ() {
+          su -s /bin/bash www-data -c "php /var/www/html/occ $*"
+        }
+
+        echo "Waiting for Nextcloud installation..."
+        until [ -f /var/www/html/config/config.php ]; do
+          sleep 5
+        done
+
+        until occ status 2>/dev/null | grep -q "installed: true"; do
+          sleep 5
+        done
+
+        echo "Enabling dashboard widget app..."
+        occ app:disable booked_events_widget || true
+        occ app:enable booked_events_widget
+
+        echo "Creating demo user if needed..."
+        if ! occ user:info demo >/dev/null 2>&1; then
+          su -s /bin/bash www-data -c "OC_PASS=$$OC_PASS php /var/www/html/occ user:add --password-from-env --display-name='Demo User' demo"
+        fi
+
+        echo "Configuring default landing page and dashboard layout..."
+        occ config:app:set core defaultpage --value=/apps/dashboard/
+        occ config:app:set dashboard layout --value=booked_events_widget-events,calendar,files
+        occ user:setting demo dashboard layout booked_events_widget-events,calendar,files
+
+        echo "Initialization complete."
+    volumes:
+      - nextcloud_data:/var/www/html
+
+volumes:
+  nextcloud_data:
