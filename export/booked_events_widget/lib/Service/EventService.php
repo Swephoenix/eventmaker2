@@ -39,6 +39,7 @@ class EventService {
 			'location' => (string)$event['location'],
 			'description' => (string)$event['description'],
 			'link' => (string)$event['link'],
+			'isPast' => (bool)$event['is_past'],
 		], $this->getEventsWithIds());
 	}
 
@@ -198,8 +199,48 @@ class EventService {
 			'location' => $location,
 			'description' => $description,
 			'link' => $link,
+			'is_past' => $this->isPastEvent($month, $day),
 			'sort_order' => (int)($event['sort_order'] ?? (($index + 1) * 10)),
 		];
+	}
+
+	private function isPastEvent(string $month, string $day): bool {
+		$monthMap = [
+			'januari' => 1,
+			'februari' => 2,
+			'mars' => 3,
+			'april' => 4,
+			'maj' => 5,
+			'juni' => 6,
+			'juli' => 7,
+			'augusti' => 8,
+			'september' => 9,
+			'oktober' => 10,
+			'november' => 11,
+			'december' => 12,
+		];
+
+		$monthNumber = $monthMap[mb_strtolower($month)] ?? null;
+		if ($monthNumber === null) {
+			return false;
+		}
+
+		if (!preg_match('/(\d{1,2})(?:\s*-\s*(\d{1,2}))?/', $day, $matches)) {
+			return false;
+		}
+
+		$endDay = isset($matches[2]) && $matches[2] !== ''
+			? (int)$matches[2]
+			: (int)$matches[1];
+
+		try {
+			$eventDate = new \DateTimeImmutable(sprintf('%d-%02d-%02d', (int)date('Y'), $monthNumber, $endDay));
+			$today = new \DateTimeImmutable('today');
+		} catch (\Exception) {
+			return false;
+		}
+
+		return $eventDate < $today;
 	}
 
 	private function cleanText(string $value): string {

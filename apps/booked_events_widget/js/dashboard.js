@@ -4,6 +4,8 @@
 
 	const events = OCP.InitialState.loadState(appId, 'events', [])
 	const manageUrl = OCP.InitialState.loadState(appId, 'manageUrl', '/apps/booked_events_widget/')
+	const upcomingEvents = events.filter((event) => !event.isPast)
+	const pastEvents = events.filter((event) => event.isPast)
 
 	const escapeHtml = (value) => String(value ?? '')
 		.replace(/&/g, '&amp;')
@@ -35,6 +37,15 @@
 				<p class="bew-dialog__text"></p>
 				<a class="bew-dialog__link" href="#" target="_blank" rel="noreferrer noopener" hidden>Läs mer</a>
 			</div>
+		</div>
+	`
+
+	const renderToolbar = (view) => `
+		<div class="bew-widget__actions">
+			<a class="bew-widget__link" href="${escapeHtml(manageUrl)}">Hantera event</a>
+			<button class="bew-widget__secondary" type="button" data-toggle-history="true">
+				${view === 'past' ? 'Kommande event' : 'Tidigare event'}
+			</button>
 		</div>
 	`
 
@@ -77,37 +88,49 @@
 			el.style.display = 'flex'
 			el.style.flexDirection = 'column'
 			el.style.overflow = 'hidden'
+			const renderWidget = (view = 'upcoming') => {
+				const visibleEvents = view === 'past' ? pastEvents : upcomingEvents
+				const markup = visibleEvents.length === 0
+					? `<div class="bew-empty">${view === 'past' ? 'Inga tidigare event tillgängliga.' : 'Inga aktuella eller kommande event tillgängliga just nu.'}</div>`
+					: `<ul class="bew-list">${visibleEvents.map((event, index) => renderEvent(event, index)).join('')}</ul>`
 
-			const markup = events.length === 0
-				? '<div class="bew-empty">Inga event tillgängliga just nu.</div>'
-				: `<ul class="bew-list">${events.map(renderEvent).join('')}</ul>`
-
-			el.innerHTML = `
-				<div class="bew-widget">
-					<div class="bew-widget__header">
-						<div>
-							<div class="bew-widget__eyebrow">Eventplanering</div>
-							<div class="bew-widget__intro">Kommande inbokade och potentiella event.</div>
+				el.innerHTML = `
+					<div class="bew-widget">
+						<div class="bew-widget__header">
+							<div>
+								<div class="bew-widget__eyebrow">Eventplanering</div>
+								<div class="bew-widget__intro">Kommande inbokade och potentiella event.</div>
+							</div>
+							${renderToolbar(view)}
 						</div>
-						<a class="bew-widget__link" href="${escapeHtml(manageUrl)}">Hantera event</a>
+						${markup}
+						${renderDialog()}
 					</div>
-					${markup}
-					${renderDialog()}
-				</div>
-			`
+				`
 
-			el.querySelectorAll('[data-event-index]').forEach((button) => {
-				button.addEventListener('click', () => {
-					const index = Number(button.getAttribute('data-event-index'))
-					if (!Number.isNaN(index) && events[index]) {
-						openDialog(el, events[index])
-					}
+				el.querySelectorAll('[data-event-index]').forEach((button) => {
+					button.addEventListener('click', () => {
+						const index = Number(button.getAttribute('data-event-index'))
+						if (!Number.isNaN(index) && visibleEvents[index]) {
+							openDialog(el, visibleEvents[index])
+						}
+					})
 				})
-			})
 
-			el.querySelectorAll('[data-dialog-close]').forEach((closeButton) => {
-				closeButton.addEventListener('click', () => closeDialog(el))
-			})
+				el.querySelectorAll('[data-dialog-close]').forEach((closeButton) => {
+					closeButton.addEventListener('click', () => closeDialog(el))
+				})
+
+				const historyButton = el.querySelector('[data-toggle-history]')
+				if (historyButton) {
+					historyButton.addEventListener('click', () => {
+						closeDialog(el)
+						renderWidget(view === 'past' ? 'upcoming' : 'past')
+					})
+				}
+			}
+
+			renderWidget()
 		})
 	}
 

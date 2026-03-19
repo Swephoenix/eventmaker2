@@ -54,26 +54,26 @@ NR>1{
 		}
 
 		if($i ~ /event-date-month/){
-			gsub(/.*>/,"",$i)
-			gsub(/<.*/,"",$i)
+			sub(/^[^>]*>/,"",$i)
+			sub(/<[^<]*$/,"",$i)
 			month=$i
 		}
 
 		if($i ~ /event-date-day/){
-			gsub(/.*>/,"",$i)
-			gsub(/<.*/,"",$i)
+			sub(/^[^>]*>/,"",$i)
+			sub(/<[^<]*$/,"",$i)
 			day=$i
 		}
 
 		if($i ~ /event-date-range/){
-			gsub(/.*>/,"",$i)
-			gsub(/<.*/,"",$i)
+			sub(/^[^>]*>/,"",$i)
+			sub(/<[^<]*$/,"",$i)
 			range=$i
 		}
 
 		if($i ~ /event-meta/){
-			gsub(/.*>/,"",$i)
-			gsub(/<.*/,"",$i)
+			sub(/^[^>]*>/,"",$i)
+			sub(/<[^<]*$/,"",$i)
 			place=$i
 		}
 	}
