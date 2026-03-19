@@ -43,8 +43,8 @@
 
 	const renderToolbar = (view) => `
 		<div class="bew-widget__actions">
-			<a class="bew-widget__link" href="${escapeHtml(manageUrl)}">Hantera event</a>
-			<a class="bew-widget__secondary-link" href="${escapeHtml(personnelUrl)}">Eventpersonal</a>
+			<a class="bew-widget__link" href="${escapeHtml(manageUrl)}">För eventplanerare</a>
+			<a class="bew-widget__secondary-link" href="${escapeHtml(personnelUrl)}">För eventpersonal</a>
 			<button class="bew-widget__secondary" type="button" data-toggle-history="true">
 				${view === 'past' ? 'Kommande event' : 'Tidigare event'}
 			</button>
