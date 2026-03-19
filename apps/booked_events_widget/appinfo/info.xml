@@ -18,6 +18,6 @@
     <dashboard/>
   </types>
   <dependencies>
-    <nextcloud min-version="30" max-version="31"/>
+    <nextcloud min-version="30" max-version="32"/>
   </dependencies>
 </info>
