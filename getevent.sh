@@ -37,15 +37,24 @@ for index, item in enumerate(payload, start=1):
     title = str(item.get("title", "")).strip()
     if not title:
         continue
+    date = str(item.get("date", "")).strip()
+    month = str(item.get("month", "")).strip()
+    day = str(item.get("day", "")).strip()
+    time = str(item.get("time", "")).strip()
+    place = str(item.get("place", "")).strip()
+    location = str(item.get("location", "")).strip()
     events.append({
         "title": title,
-        "month": str(item.get("month", "")).strip(),
-        "day": str(item.get("day", "")).strip(),
-        "time": str(item.get("time", "")).strip(),
-        "place": str(item.get("place", "")).strip(),
+        "date": date,
+        "month": month,
+        "day": day,
+        "time": time,
+        "place": place,
+        "location": location,
         "description": str(item.get("description", "")).strip(),
         "link": str(item.get("link", "")).strip(),
         "sort_order": int(item.get("sort_order", index * 10)),
+        "source": "api",
     })
 
 if not events:
