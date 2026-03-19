@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Dashboard Demo</title>
+<style>
+:root{
+  --bg-1:#0a6aa6;
+  --bg-2:#0e3f8a;
+  --bg-3:#0d8fd4;
+  --surface:#f8fbff;
+  --surface-2:#ffffff;
+  --surface-3:#eef5fb;
+  --surface-4:#e6eff8;
+  --text:#16324a;
+  --muted:#67819a;
+  --line:rgba(22,50,74,.12);
+  --line-strong:rgba(22,50,74,.18);
+  --primary:#1c78c0;
+  --primary-strong:#0e63aa;
+  --accent:#f07c17;
+  --accent-soft:#fff1e4;
+  --success:#2e8b57;
+  --shadow-lg:0 24px 60px rgba(7,37,73,.18);
+  --shadow-md:0 12px 28px rgba(12,44,82,.12);
+  --shadow-sm:0 6px 16px rgba(12,44,82,.08);
+  --radius-xl:24px;
+  --radius-lg:18px;
+  --radius-md:14px;
+  --radius-sm:12px;
+  --focus:0 0 0 4px rgba(28,120,192,.16);
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,body{
+  margin:0;
+  padding:0;
+  min-height:100%;
+}
+
+body{
+  font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  color:var(--text);
+  background:
+    radial-gradient(circle at top right, rgba(255,255,255,.16), transparent 28%),
+    radial-gradient(circle at left center, rgba(255,255,255,.08), transparent 24%),
+    linear-gradient(135deg, var(--bg-1), var(--bg-2) 56%, var(--bg-3));
+  padding:24px;
+}
+
+.app{
+  max-width:1400px;
+  margin:0 auto;
+}
+
+.topbar{
+  display:grid;
+  grid-template-columns:1.6fr auto;
+  gap:18px;
+  margin-bottom:22px;
+}
+
+.hero{
+  background:linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.18));
+  border:1px solid rgba(255,255,255,.18);
+  box-shadow:var(--shadow-lg);
+  border-radius:28px;
+  color:#fff;
+  padding:28px 32px;
+  min-height:160px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+.eyebrow{
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  font-size:12px;
+  font-weight:700;
+  opacity:.8;
+  margin-bottom:10px;
+}
+
+.hero h1{
+  margin:0 0 8px 0;
+  font-size:clamp(30px, 4vw, 48px);
+  line-height:1.05;
+  font-weight:750;
+}
+
+.hero p{
+  margin:0;
+  max-width:800px;
+  font-size:18px;
+  line-height:1.5;
+  color:rgba(255,255,255,.88);
+}
+
+.hero-stats{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(180px, 1fr));
+  gap:16px;
+}
+
+.stat-card{
+  background:linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.12));
+  border:1px solid rgba(255,255,255,.18);
+  color:#fff;
+  border-radius:22px;
+  padding:18px 18px 20px;
+  box-shadow:var(--shadow-md);
+  min-height:160px;
+}
+
+.stat-label{
+  text-transform:uppercase;
+  letter-spacing:.16em;
+  font-size:12px;
+  font-weight:700;
+  opacity:.82;
+  margin-bottom:10px;
+}
+
+.stat-value{
+  font-size:46px;
+  font-weight:800;
+  line-height:1;
+  margin-bottom:10px;
+}
+
+.stat-copy{
+  font-size:16px;
+  line-height:1.35;
+  color:rgba(255,255,255,.9);
+}
+
+.layout{
+  display:grid;
+  grid-template-columns:360px minmax(0, 1fr);
+  gap:22px;
+  align-items:start;
+}
+
+.sidebar{
+  background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(247,251,255,.96));
+  border:1px solid rgba(255,255,255,.55);
+  border-radius:28px;
+  box-shadow:var(--shadow-lg);
+  padding:18px;
+  backdrop-filter:blur(14px);
+}
+
+.sidebar-head{
+  padding:14px 14px 16px;
+  border-bottom:1px solid var(--line);
+  margin-bottom:14px;
+}
+
+.sidebar-title{
+  margin:0 0 6px 0;
+  font-size:32px;
+  line-height:1.05;
+  font-weight:800;
+}
+
+.sidebar-subtitle{
+  margin:0;
+  color:var(--muted);
+  line-height:1.45;
+}
+
+.event-list{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.event-card{
+  display:grid;
+  grid-template-columns:110px 1fr;
+  gap:14px;
+  background:var(--surface-3);
+  border:1px solid transparent;
+  border-radius:20px;
+  padding:14px;
+  cursor:pointer;
+  transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.event-card:hover{
+  transform:translateY(-2px);
+  background:#f3f8fd;
+  border-color:rgba(28,120,192,.16);
+  box-shadow:var(--shadow-sm);
+}
+
+.event-card.active{
+  background:#f7fbff;
+  border-color:rgba(28,120,192,.26);
+  box-shadow:0 12px 24px rgba(28,120,192,.10);
+}
+
+.event-date{
+  background:#dfeaf5;
+  border-radius:18px;
+  min-height:94px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:10px;
+}
+
+.event-month{
+  font-size:14px;
+  color:#4e6f8c;
+  text-transform:lowercase;
+  font-weight:700;
+  margin-bottom:4px;
+}
+
+.event-day{
+  font-size:30px;
+  font-weight:800;
+  line-height:1;
+  margin-bottom:4px;
+}
+
+.event-body{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+.event-title{
+  margin:0 0 6px 0;
+  font-size:19px;
+  line-height:1.2;
+  font-weight:800;
+}
+
+.event-meta{
+  margin:0;
+  color:var(--muted);
+  line-height:1.4;
+  font-weight:600;
+}
+
+.main{
+  background:#f7fafc;
+  border:1px solid rgba(255,255,255,.55);
+  border-radius:28px;
+  box-shadow:var(--shadow-lg);
+  overflow:hidden;
+}
+
+.main-head{
+  padding:24px 26px 18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.84));
+  border-bottom:1px solid var(--line);
+}
+
+.main-kicker{
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  font-size:12px;
+  font-weight:800;
+  color:#6a84a0;
+  margin-bottom:10px;
+}
+
+.main-title-row{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+}
+
+.main-title h2{
+  margin:0 0 8px 0;
+  font-size:42px;
+  line-height:1.04;
+  font-weight:850;
+}
+
+.main-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+}
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:#edf5fc;
+  color:#325779;
+  border:1px solid rgba(50,87,121,.10);
+  border-radius:999px;
+  padding:9px 14px;
+  font-size:14px;
+  font-weight:700;
+}
+
+.sort-chip{
+  background:#e7f1fa;
+  color:#1c5b93;
+  border:1px solid rgba(28,120,192,.15);
+  border-radius:999px;
+  padding:10px 14px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.main-body{
+  padding:22px;
+}
+
+.tabbar{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:18px;
+}
+
+.tab-btn{
+  border:none;
+  background:var(--surface-2);
+  color:#476681;
+  padding:14px 18px;
+  min-height:50px;
+  border-radius:16px;
+  font-size:15px;
+  font-weight:800;
+  cursor:pointer;
+  box-shadow:inset 0 0 0 1px rgba(71,102,129,.12);
+  transition:transform .16s ease, box-shadow .16s ease, background .16s ease, color .16s ease;
+}
+
+.tab-btn:hover{
+  transform:translateY(-1px);
+  box-shadow:inset 0 0 0 1px rgba(28,120,192,.28), 0 8px 16px rgba(28,120,192,.08);
+  color:#21496e;
+}
+
+.tab-btn.active{
+  background:linear-gradient(180deg, #fff6ee, #ffeddc);
+  color:#b85e12;
+  box-shadow:inset 0 0 0 1px rgba(240,124,23,.26), 0 10px 20px rgba(240,124,23,.10);
+}
+
+.content-grid{
+  display:grid;
+  grid-template-columns:minmax(0, 1.7fr) 360px;
+  gap:18px;
+}
+
+.panel{
+  background:var(--surface-2);
+  border:1px solid rgba(22,50,74,.08);
+  border-radius:24px;
+  box-shadow:var(--shadow-md);
+}
+
+.editor-panel{
+  padding:22px;
+}
+
+.panel-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
+
+.panel-title{
+  margin:0 0 6px 0;
+  font-size:28px;
+  line-height:1.05;
+  font-weight:850;
+}
+
+.panel-copy{
+  margin:0;
+  color:var(--muted);
+  line-height:1.5;
+}
+
+.actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.btn{
+  appearance:none;
+  border:none;
+  border-radius:14px;
+  min-height:46px;
+  padding:0 16px;
+  font-size:15px;
+  font-weight:800;
+  cursor:pointer;
+  transition:transform .16s ease, box-shadow .16s ease, opacity .16s ease, background .16s ease;
+}
+
+.btn:hover{
+  transform:translateY(-1px);
+}
+
+.btn:active{
+  transform:translateY(0);
+}
+
+.btn-primary{
+  background:linear-gradient(180deg, var(--primary), var(--primary-strong));
+  color:#fff;
+  box-shadow:0 10px 20px rgba(28,120,192,.18);
+}
+
+.btn-secondary{
+  background:#eef5fb;
+  color:#28557d;
+  box-shadow:inset 0 0 0 1px rgba(40,85,125,.10);
+}
+
+.btn-accent{
+  background:linear-gradient(180deg, #ff9f4e, var(--accent));
+  color:#fff;
+  box-shadow:0 10px 20px rgba(240,124,23,.18);
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:16px;
+}
+
+.form-grid .full{
+  grid-column:1 / -1;
+}
+
+.field{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.field label{
+  font-size:13px;
+  font-weight:800;
+  color:#5c7b97;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
+.input,
+.textarea,
+.select{
+  width:100%;
+  border:1px solid var(--line-strong);
+  background:#fbfdff;
+  color:var(--text);
+  border-radius:16px;
+  padding:14px 16px;
+  font-size:16px;
+  line-height:1.4;
+  transition:border-color .16s ease, box-shadow .16s ease, background .16s ease;
+  outline:none;
+}
+
+.textarea{
+  resize:vertical;
+  min-height:124px;
+}
+
+.input::placeholder,
+.textarea::placeholder{
+  color:#8ba2b8;
+}
+
+.input:hover,
+.textarea:hover,
+.select:hover{
+  background:#fff;
+  border-color:rgba(28,120,192,.22);
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus,
+.tab-btn:focus-visible,
+.btn:focus-visible,
+.event-card:focus-visible,
+.chat-input:focus-visible,
+.check-text:focus-visible,
+.table-input:focus-visible{
+  border-color:rgba(28,120,192,.45);
+  box-shadow:var(--focus);
+  outline:none;
+}
+
+.section-block{
+  padding:18px;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:linear-gradient(180deg, #fbfdff, #f7fbff);
+}
+
+.section-block + .section-block{
+  margin-top:16px;
+}
+
+.section-block h4{
+  margin:0 0 8px 0;
+  font-size:18px;
+  font-weight:800;
+}
+
+.section-block p{
+  margin:0 0 14px 0;
+  color:var(--muted);
+  line-height:1.5;
+}
+
+.table-wrap{
+  overflow-x:auto;
+  overflow-y:hidden;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:#fbfdff;
+}
+
+.staff-table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  min-width:760px;
+}
+
+.staff-table th{
+  text-align:left;
+  padding:14px 14px;
+  font-size:13px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  color:#62809d;
+  background:#f0f6fb;
+  border-bottom:1px solid var(--line);
+}
+
+.staff-table td{
+  padding:12px 14px;
+  border-bottom:1px solid rgba(22,50,74,.07);
+  vertical-align:top;
+}
+
+.staff-table tr:last-child td{
+  border-bottom:none;
+}
+
+.table-input{
+  width:100%;
+  min-width:120px;
+  border:1px solid transparent;
+  background:#fff;
+  border-radius:12px;
+  padding:12px 12px;
+  font-size:15px;
+  color:var(--text);
+  transition:border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.table-input:hover{
+  border-color:rgba(28,120,192,.16);
+  background:#fbfdff;
+}
+
+.icon-btn{
+  border:none;
+  background:#fff2e8;
+  color:#cc6514;
+  min-width:40px;
+  height:40px;
+  border-radius:12px;
+  font-size:18px;
+  font-weight:900;
+  cursor:pointer;
+  box-shadow:inset 0 0 0 1px rgba(204,101,20,.12);
+}
+
+.icon-btn:hover{
+  background:#ffe7d1;
+}
+
+.checklist{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.check-row{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:12px 12px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:#fbfdff;
+}
+
+.check{
+  appearance:none;
+  width:24px;
+  height:24px;
+  border-radius:8px;
+  border:2px solid #a9bfd3;
+  background:#fff;
+  cursor:pointer;
+  position:relative;
+  transition:all .16s ease;
+}
+
+.check:checked{
+  border-color:var(--success);
+  background:var(--success);
+}
+
+.check:checked::after{
+  content:"";
+  position:absolute;
+  left:6px;
+  top:2px;
+  width:6px;
+  height:12px;
+  border:solid #fff;
+  border-width:0 3px 3px 0;
+  transform:rotate(45deg);
+}
+
+.check-text{
+  width:100%;
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--text);
+  font-size:16px;
+  border-radius:12px;
+  padding:10px 12px;
+}
+
+.check-text:hover{
+  background:#fff;
+  border-color:rgba(28,120,192,.12);
+}
+
+.check-row.done .check-text{
+  color:#7e98af;
+  text-decoration:line-through;
+}
+
+.chat-panel{
+  display:flex;
+  flex-direction:column;
+  min-height:620px;
+  padding:0;
+  overflow:hidden;
+}
+
+.chat-head{
+  padding:18px 18px 16px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, #fcfeff, #f5fafe);
+}
+
+.chat-title{
+  margin:0 0 6px 0;
+  font-size:22px;
+  font-weight:850;
+}
+
+.chat-sub{
+  margin:0;
+  color:var(--muted);
+  line-height:1.45;
+}
+
+.chat-box{
+  flex:1;
+  padding:16px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.72), rgba(245,250,254,.92));
+  overflow:auto;
+}
+
+.msg{
+  max-width:84%;
+  margin-bottom:12px;
+  padding:12px 14px;
+  border-radius:16px;
+  line-height:1.45;
+  font-size:15px;
+  box-shadow:var(--shadow-sm);
+}
+
+.msg.system{
+  background:#eef5fb;
+  color:#355a7c;
+  border-top-left-radius:6px;
+}
+
+.msg.me{
+  margin-left:auto;
+  background:linear-gradient(180deg, #ffefdf, #ffe4c7);
+  color:#87460a;
+  border-top-right-radius:6px;
+}
+
+.chat-compose{
+  display:flex;
+  gap:10px;
+  padding:14px;
+  border-top:1px solid var(--line);
+  background:#fff;
+}
+
+.chat-input{
+  flex:1;
+  border:1px solid var(--line-strong);
+  background:#fbfdff;
+  border-radius:16px;
+  min-height:50px;
+  padding:0 16px;
+  font-size:15px;
+  outline:none;
+}
+
+.empty-note{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  background:#eff7ff;
+  color:#396287;
+  border-radius:14px;
+  padding:12px 14px;
+  font-weight:700;
+  border:1px solid rgba(57,98,135,.10);
+}
+
+.small{
+  font-size:14px;
+  color:var(--muted);
+}
+
+@media (max-width: 1180px){
+  .content-grid{
+    grid-template-columns:1fr;
+  }
+
+  .chat-panel{
+    min-height:520px;
+  }
+}
+
+@media (max-width: 980px){
+  .topbar{
+    grid-template-columns:1fr;
+  }
+
+  .layout{
+    grid-template-columns:1fr;
+  }
+
+  .hero-stats{
+    grid-template-columns:1fr 1fr;
+  }
+}
+
+@media (max-width: 720px){
+  body{
+    padding:14px;
+  }
+
+  .hero{
+    padding:22px;
+  }
+
+  .main-head,
+  .main-body{
+    padding:18px;
+  }
+
+  .form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .hero-stats{
+    grid-template-columns:1fr;
+  }
+
+  .main-title h2{
+    font-size:32px;
+  }
+
+  .sidebar-title{
+    font-size:26px;
+  }
+
+  .event-card{
+    grid-template-columns:92px 1fr;
+  }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <section class="topbar">
+    <div class="hero">
+      <div class="eyebrow">Booked events</div>
+      <h1>Hantera event</h1>
+      <p>Skapa, redigera och prioritera event som visas i dashboard widgeten. Nedan kan du växla mellan översikt, personal, material och marknadsföring utan att lämna vyn.</p>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat-card">
+        <div class="stat-label">Aktiva event</div>
+        <div class="stat-value">8</div>
+        <div class="stat-copy">Evenemang som just nu är synliga eller planerade.</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Adminflöde</div>
+        <div class="stat-copy" style="font-size:18px;font-weight:800;line-height:1.25;">Skapa, prioritera, publicera</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h2 class="sidebar-title">Booked events</h2>
+        <p class="sidebar-subtitle">Välj ett event i listan. Kortet till höger visar sammanfattning först och redigeringsytor direkt under.</p>
+      </div>
+
+      <div class="event-list" id="eventList">
+        <button class="event-card active" type="button" aria-label="Välj 60+ Mässan Uppsala">
+          <div class="event-date">
+            <div class="event-month">mars</div>
+            <div class="event-day">18–19</div>
+          </div>
+          <div class="event-body">
+            <h3 class="event-title">60+ Mässan Uppsala</h3>
+            <p class="event-meta">Uppsala · Två dagar</p>
+          </div>
+        </button>
+
+        <button class="event-card" type="button" aria-label="Välj Morgon med Swebbtv">
+          <div class="event-date">
+            <div class="event-month">mars</div>
+            <div class="event-day">19</div>
+          </div>
+          <div class="event-body">
+            <h3 class="event-title">Elsa och Bo i Morgon med Swebbtv</h3>
+            <p class="event-meta">Swebbtv · 09.00–11.00</p>
+          </div>
+        </button>
+
+        <button class="event-card" type="button" aria-label="Välj Årsstämma">
+          <div class="event-date">
+            <div class="event-month">mars</div>
+            <div class="event-day">22</div>
+          </div>
+          <div class="event-body">
+            <h3 class="event-title">Årsstämma</h3>
+            <p class="event-meta">Stockholm/Uppsala · 09.00–12.00</p>
+          </div>
+        </button>
+
+        <button class="event-card" type="button" aria-label="Välj Seniorfestival Malmö">
+          <div class="event-date">
+            <div class="event-month">mars</div>
+            <div class="event-day">25–26</div>
+          </div>
+          <div class="event-body">
+            <h3 class="event-title">Seniorfestival Malmö</h3>
+            <p class="event-meta">Malmö · Två dagar</p>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-head">
+        <div class="main-kicker">Redigera</div>
+        <div class="main-title-row">
+          <div class="main-title">
+            <h2>60+ Mässan Uppsala</h2>
+            <div class="main-meta">
+              <span class="badge">mars 18–19</span>
+              <span class="badge">Uppsala · Två dagar</span>
+            </div>
+          </div>
+          <div class="sort-chip">Sortering 10</div>
+        </div>
+      </div>
+
+      <div class="main-body">
+        <div class="tabbar">
+          <button class="tab-btn active" type="button" data-tab="overview">Översikt</button>
+          <button class="tab-btn" type="button" data-tab="staff">Personal</button>
+          <button class="tab-btn" type="button" data-tab="material">Material</button>
+          <button class="tab-btn" type="button" data-tab="marketing">Marknadsföring</button>
+        </div>
+
+        <div class="content-grid">
+          <section class="panel editor-panel">
+            <div id="dynamicContent"></div>
+          </section>
+
+          <aside class="panel chat-panel">
+            <div class="chat-head">
+              <h3 class="chat-title">Chat</h3>
+              <p class="chat-sub">Intern samordning för eventet. Den här panelen ligger kvar när du byter flik.</p>
+            </div>
+
+            <div class="chat-box" id="chatBox">
+              <div class="msg system">Vi behöver säkerställa att rollup, flyers och kontaktlista är på plats före avfärd.</div>
+              <div class="msg me">Jag tar med rollup och bordsmaterial.</div>
+              <div class="msg system">Bra. Lägg gärna till vem som ansvarar för bemanningen i personalfliken.</div>
+            </div>
+
+            <div class="chat-compose">
+              <input class="chat-input" id="chatInput" type="text" placeholder="Skriv ett meddelande och tryck Enter">
+              <button class="btn btn-accent" type="button" id="sendBtn">Skicka</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </section>
+</div>
+
+<script>
+const state = {
+  activeTab: "overview",
+  overview: {
+    address: "Uppsala Konsert & Kongress, Vaksala torg 1, 753 31 Uppsala",
+    managerName: "Bo Hansson",
+    managerPhone: "070 123 45 67",
+    managerEmail: "bo.hansson@example.se",
+    notes: "Bo ersätter Elsa på plats. Kort presentation om pensionspolitik på lilla scenen."
+  },
+  staff: [
+    { name: "Bo Hansson", role: "Eventansvarig", area: "Övergripande ansvar, scen och koordinering" },
+    { name: "Micael Hamberg", role: "Representant", area: "Närvaro på mässgolvet och samtal med besökare" },
+    { name: "Anna Nilsson", role: "Volontär", area: "Broschyrer, välkomnande och praktiskt stöd" }
+  ],
+  material: [
+    { text: "Ta med Rollup", done: false },
+    { text: "Ta med flyers", done: true },
+    { text: "Kontaktlista till bemanning", done: false }
+  ],
+  marketing: [
+    { city: "Uppsala", mailSent: "Ja", facebookPages: "Uppsala Nyheter, Vad händer i Uppsala", comment: "Prioritera lokala seniorgrupper" },
+    { city: "Stockholm", mailSent: "Ja", facebookPages: "Stockholm Direkt, Evenemang i Stockholm", comment: "Närliggande medlemmar kan pendla" },
+    { city: "Västerås", mailSent: "Nej", facebookPages: "Vad händer i Västerås", comment: "Skicka utskick om plats finns kvar" }
+  ]
+};
+
+const dynamicContent = document.getElementById("dynamicContent");
+const tabs = document.querySelectorAll(".tab-btn");
+const chatInput = document.getElementById("chatInput");
+const chatBox = document.getElementById("chatBox");
+const sendBtn = document.getElementById("sendBtn");
+
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function renderOverview() {
+  dynamicContent.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <h3 class="panel-title">Översikt</h3>
+        <p class="panel-copy">Här redigerar du grunduppgifter för eventet. Fälten är utformade för snabb överblick och enkel uppdatering.</p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary" type="button">Förhandsgranska</button>
+        <button class="btn btn-primary" type="button">Spara ändringar</button>
+      </div>
+    </div>
+
+    <div class="section-block">
+      <h4>Grunduppgifter</h4>
+      <p>Adress och kontaktuppgifter för ansvarig visas här som redigerbara fält.</p>
+
+      <div class="form-grid">
+        <div class="field full">
+          <label for="address">Adress</label>
+          <input class="input" id="address" type="text" value="${escapeHtml(state.overview.address)}">
+        </div>
+
+        <div class="field">
+          <label for="managerName">Eventansvarig</label>
+          <input class="input" id="managerName" type="text" value="${escapeHtml(state.overview.managerName)}">
+        </div>
+
+        <div class="field">
+          <label for="managerPhone">Telefon</label>
+          <input class="input" id="managerPhone" type="text" value="${escapeHtml(state.overview.managerPhone)}">
+        </div>
+
+        <div class="field full">
+          <label for="managerEmail">Mejl</label>
+          <input class="input" id="managerEmail" type="email" value="${escapeHtml(state.overview.managerEmail)}">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-block">
+      <h4>Intern anteckning</h4>
+      <p>Detta fält kan användas för korta instruktioner inför bemanning, transport eller program.</p>
+      <div class="field">
+        <label for="notes">Anteckning</label>
+        <textarea class="textarea" id="notes">${escapeHtml(state.overview.notes)}</textarea>
+      </div>
+      <div class="small">Detta är demo, så ändringarna sparas bara i webbläsarens minne under sessionen.</div>
+    </div>
+  `;
+
+  document.getElementById("address").addEventListener("input", e => state.overview.address = e.target.value);
+  document.getElementById("managerName").addEventListener("input", e => state.overview.managerName = e.target.value);
+  document.getElementById("managerPhone").addEventListener("input", e => state.overview.managerPhone = e.target.value);
+  document.getElementById("managerEmail").addEventListener("input", e => state.overview.managerEmail = e.target.value);
+  document.getElementById("notes").addEventListener("input", e => state.overview.notes = e.target.value);
+}
+
+function renderStaff() {
+  dynamicContent.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <h3 class="panel-title">Personal</h3>
+        <p class="panel-copy">Redigera roller och ansvar direkt i tabellen. Tabellen kan scrollas horisontellt om den blir bred, men inte vertikalt.</p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-accent" type="button" id="addPersonBtn">Lägg till person</button>
+      </div>
+    </div>
+
+    <div class="section-block">
+      <h4>Bemanning och ansvar</h4>
+      <p>Varje rad motsvarar en person i eventorganisationen. Rollen och ansvarsområdet kan justeras direkt.</p>
+
+      <div class="table-wrap">
+        <table class="staff-table">
+          <thead>
+            <tr>
+              <th>Namn</th>
+              <th>Roll</th>
+              <th>Ansvarsområde</th>
+              <th>Ta bort</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.staff.map((person, index) => `
+              <tr>
+                <td><input class="table-input" data-type="name" data-index="${index}" value="${escapeHtml(person.name)}"></td>
+                <td><input class="table-input" data-type="role" data-index="${index}" value="${escapeHtml(person.role)}"></td>
+                <td><input class="table-input" data-type="area" data-index="${index}" value="${escapeHtml(person.area)}"></td>
+                <td><button class="icon-btn remove-person" type="button" data-index="${index}" aria-label="Ta bort person">×</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  document.querySelectorAll(".table-input").forEach(input => {
+    input.addEventListener("input", e => {
+      const index = Number(e.target.dataset.index);
+      const type = e.target.dataset.type;
+      state.staff[index][type] = e.target.value;
+    });
+  });
+
+  document.querySelectorAll(".remove-person").forEach(btn => {
+    btn.addEventListener("click", e => {
+      const index = Number(e.currentTarget.dataset.index);
+      state.staff.splice(index, 1);
+      renderStaff();
+    });
+  });
+
+  document.getElementById("addPersonBtn").addEventListener("click", () => {
+    state.staff.push({
+      name: "",
+      role: "",
+      area: ""
+    });
+    renderStaff();
+  });
+}
+
+function renderMaterial() {
+  dynamicContent.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <h3 class="panel-title">Material</h3>
+        <p class="panel-copy">Skapa en enkel checklista för det som ska med till eventet. Varje rad kan bockas av och redigeras direkt.</p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-accent" type="button" id="addChecklistBtn">Lägg till punkt</button>
+      </div>
+    </div>
+
+    <div class="section-block">
+      <h4>Checklista</h4>
+      <p>Markera färdigt material och uppdatera texten efter behov.</p>
+
+      <div class="checklist">
+        ${state.material.map((item, index) => `
+          <div class="check-row ${item.done ? "done" : ""}">
+            <input class="check" type="checkbox" data-index="${index}" ${item.done ? "checked" : ""} aria-label="Markera som klar">
+            <input class="check-text" type="text" data-index="${index}" value="${escapeHtml(item.text)}">
+            <button class="icon-btn remove-item" type="button" data-index="${index}" aria-label="Ta bort checklistepunkt">×</button>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+
+    <div class="empty-note">Tips: lägg in till exempel rollup, flyers, visitkort, bordsduk och förlängningskabel.</div>
+  `;
+
+  document.querySelectorAll(".check").forEach(box => {
+    box.addEventListener("change", e => {
+      const index = Number(e.target.dataset.index);
+      state.material[index].done = e.target.checked;
+      renderMaterial();
+    });
+  });
+
+  document.querySelectorAll(".check-text").forEach(input => {
+    input.addEventListener("input", e => {
+      const index = Number(e.target.dataset.index);
+      state.material[index].text = e.target.value;
+    });
+  });
+
+  document.querySelectorAll(".remove-item").forEach(btn => {
+    btn.addEventListener("click", e => {
+      const index = Number(e.currentTarget.dataset.index);
+      state.material.splice(index, 1);
+      renderMaterial();
+    });
+  });
+
+  document.getElementById("addChecklistBtn").addEventListener("click", () => {
+    state.material.push({
+      text: "",
+      done: false
+    });
+    renderMaterial();
+  });
+}
+
+function renderMarketing() {
+  dynamicContent.innerHTML = `
+    <div class="panel-head">
+      <div>
+        <h3 class="panel-title">Marknadsföring</h3>
+        <p class="panel-copy">Här kan du lista vilka orters medlemmar som fått mejl och vilka Facebooksidor som är aktuella att marknadsföra eventet i, särskilt nära eventorten.</p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-accent" type="button" id="addMarketingBtn">Lägg till ort</button>
+      </div>
+    </div>
+
+    <div class="section-block">
+      <h4>Utskick och lokala kanaler</h4>
+      <p>Använd tabellen för att följa upp geografisk spridning och lokala sociala kanaler som kan vara relevanta för marknadsföring.</p>
+
+      <div class="table-wrap">
+        <table class="staff-table">
+          <thead>
+            <tr>
+              <th>Ort</th>
+              <th>Mejl gått ut</th>
+              <th>Aktuella Facebooksidor</th>
+              <th>Kommentar</th>
+              <th>Ta bort</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${state.marketing.map((row, index) => `
+              <tr>
+                <td><input class="table-input marketing-input" data-type="city" data-index="${index}" value="${escapeHtml(row.city)}"></td>
+                <td><input class="table-input marketing-input" data-type="mailSent" data-index="${index}" value="${escapeHtml(row.mailSent)}"></td>
+                <td><input class="table-input marketing-input" data-type="facebookPages" data-index="${index}" value="${escapeHtml(row.facebookPages)}"></td>
+                <td><input class="table-input marketing-input" data-type="comment" data-index="${index}" value="${escapeHtml(row.comment)}"></td>
+                <td><button class="icon-btn remove-marketing" type="button" data-index="${index}" aria-label="Ta bort rad">×</button></td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="empty-note">Exempel: Uppsala, Stockholm, Västerås, Enköping och andra orter inom rimligt avstånd från eventet.</div>
+  `;
+
+  document.querySelectorAll(".marketing-input").forEach(input => {
+    input.addEventListener("input", e => {
+      const index = Number(e.target.dataset.index);
+      const type = e.target.dataset.type;
+      state.marketing[index][type] = e.target.value;
+    });
+  });
+
+  document.querySelectorAll(".remove-marketing").forEach(btn => {
+    btn.addEventListener("click", e => {
+      const index = Number(e.currentTarget.dataset.index);
+      state.marketing.splice(index, 1);
+      renderMarketing();
+    });
+  });
+
+  document.getElementById("addMarketingBtn").addEventListener("click", () => {
+    state.marketing.push({
+      city: "",
+      mailSent: "",
+      facebookPages: "",
+      comment: ""
+    });
+    renderMarketing();
+  });
+}
+
+function renderActiveTab() {
+  tabs.forEach(tab => tab.classList.toggle("active", tab.dataset.tab === state.activeTab));
+
+  if (state.activeTab === "overview") renderOverview();
+  if (state.activeTab === "staff") renderStaff();
+  if (state.activeTab === "material") renderMaterial();
+  if (state.activeTab === "marketing") renderMarketing();
+}
+
+tabs.forEach(tab => {
+  tab.addEventListener("click", () => {
+    state.activeTab = tab.dataset.tab;
+    renderActiveTab();
+  });
+});
+
+function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  const msg = document.createElement("div");
+  msg.className = "msg me";
+  msg.textContent = text;
+  chatBox.appendChild(msg);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  chatInput.value = "";
+  chatInput.focus();
+}
+
+sendBtn.addEventListener("click", sendMessage);
+chatInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    sendMessage();
+  }
+});
+
+document.querySelectorAll(".event-card").forEach(card => {
+  card.addEventListener("click", () => {
+    document.querySelectorAll(".event-card").forEach(c => c.classList.remove("active"));
+    card.classList.add("active");
+  });
+});
+
+renderActiveTab();
+</script>
+</body>
+</html>
