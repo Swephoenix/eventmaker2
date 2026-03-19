@@ -99,10 +99,6 @@
 				el.innerHTML = `
 					<div class="bew-widget">
 						<div class="bew-widget__header">
-							<div>
-								<div class="bew-widget__eyebrow">Eventplanering</div>
-								<div class="bew-widget__intro">Kommande inbokade och potentiella event.</div>
-							</div>
 							${renderToolbar(view)}
 						</div>
 						${markup}
