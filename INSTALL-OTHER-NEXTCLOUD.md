@@ -1,183 +1,149 @@
 # Installera Appen I En Annan Nextcloud-Instans
 
-Den här guiden beskriver hur du flyttar appen `booked_events_widget` till en annan Nextcloud-instans.
-
-## Vad appen gör
-
-Appen lägger till:
-
-- en dashboard-widget som visar bokade event
-- en enkel hanteringssida för att skapa, redigera och ta bort event
-- en egen databastabell för event
-
-Appens kod ligger i:
-
-`apps/booked_events_widget`
-
-## Viktigt innan du börjar
-
-Den nuvarande versionen är byggd som en demoapp.
-
-Det betyder att:
-
-- CRUD-sidan är avsiktligt förenklad
-- CSRF-kontroll är avstängd för create/update/delete i kontrollern för att få demo-flödet att fungera enkelt
-
-Om appen ska användas i en riktig produktionsmiljö bör detta härdas innan drift.
+Den här guiden beskriver det enklaste sättet att installera `booked_events_widget` i en annan Nextcloud, till exempel på en VPS.
 
 ## Krav
 
 - Nextcloud 30 eller 31
 - shell-access till servern eller containern
 - rätt att köra `occ`
-- rätt att kopiera filer till `custom_apps`
+- rätt att skriva till `custom_apps`
 
-## 1. Kopiera appen
+## Rekommenderad källa
 
-Kopiera hela katalogen:
+Använd exportpaketet:
 
-```bash
-apps/booked_events_widget
-```
+- `export/booked_events_widget.zip`
 
-till målserverns:
+eller hela mappen:
 
-```bash
-custom_apps/booked_events_widget
-```
+- `export/booked_events_widget`
 
-Exempel:
+Exportpaketet innehåller nu även:
 
-```bash
-cp -a apps/booked_events_widget /var/www/html/custom_apps/
-```
+- `getevent.sh`
+- `data/events.json`
 
-Om du använder Docker med Nextcloud-container:
+och är anpassat för att läsa event från WordPress-API:t:
 
-```bash
-docker cp apps/booked_events_widget <container_namn>:/var/www/html/custom_apps/
-```
+`https://ambitionsverige.se/wp-json/amb/v1/events`
 
-## 2. Sätt rätt ägare
+## Installation Med Zip
 
-Appkatalogen måste ägas av webbserveranvändaren, vanligtvis `www-data`.
+1. Kopiera `booked_events_widget.zip` till servern.
+
+2. Gå till din Nextcloud-root.
 
 Exempel:
 
 ```bash
-chown -R www-data:www-data /var/www/html/custom_apps/booked_events_widget
+cd /var/www/nextcloud
 ```
 
-I Docker:
+3. Packa upp appen i `custom_apps`.
 
 ```bash
+unzip booked_events_widget.zip -d custom_apps
+```
+
+4. Sätt rätt ägare.
+
+```bash
+chown -R www-data:www-data custom_apps/booked_events_widget
+```
+
+5. Aktivera appen.
+
+```bash
+sudo -u www-data php occ app:enable booked_events_widget
+```
+
+6. Kör första importen från API:t.
+
+```bash
+cd custom_apps/booked_events_widget
+chmod +x getevent.sh
+./getevent.sh data/events.json
+chown www-data:www-data data/events.json
+```
+
+7. Ladda om dashboarden i webbläsaren.
+
+## Installation Med Appmapp
+
+Om du hellre kopierar mappen direkt:
+
+```bash
+cp -a booked_events_widget /var/www/nextcloud/custom_apps/
+chown -R www-data:www-data /var/www/nextcloud/custom_apps/booked_events_widget
+sudo -u www-data php /var/www/nextcloud/occ app:enable booked_events_widget
+cd /var/www/nextcloud/custom_apps/booked_events_widget
+chmod +x getevent.sh
+./getevent.sh data/events.json
+chown www-data:www-data data/events.json
+```
+
+## Docker-Variant
+
+Om Nextcloud kör i container:
+
+```bash
+docker cp booked_events_widget <container_namn>:/var/www/html/custom_apps/
 docker exec -u root <container_namn> chown -R www-data:www-data /var/www/html/custom_apps/booked_events_widget
-```
-
-## 3. Aktivera appen
-
-Kör:
-
-```bash
-sudo -u www-data php /var/www/html/occ app:enable booked_events_widget
-```
-
-I Docker:
-
-```bash
 docker exec -u www-data <container_namn> php /var/www/html/occ app:enable booked_events_widget
+docker exec -u root <container_namn> chmod +x /var/www/html/custom_apps/booked_events_widget/getevent.sh
+docker exec -u root <container_namn> /var/www/html/custom_apps/booked_events_widget/getevent.sh /var/www/html/custom_apps/booked_events_widget/data/events.json
+docker exec -u root <container_namn> chown www-data:www-data /var/www/html/custom_apps/booked_events_widget/data/events.json
 ```
 
-När appen aktiveras:
+## Automatisk Uppdatering Var 30:e Minut
 
-- routning registreras
-- databasmigreringen körs
-- tabellen `oc_bew_events` skapas
-
-## 4. Verifiera att appen är aktiv
-
-Kör:
+Lägg till en cronrad på servern:
 
 ```bash
-sudo -u www-data php /var/www/html/occ app:list | grep booked_events_widget
+*/30 * * * * cd /var/www/nextcloud/custom_apps/booked_events_widget && ./getevent.sh data/events.json >/dev/null 2>&1
 ```
 
-eller i Docker:
+Om din Nextcloud ligger någon annanstans, byt sökvägen.
+
+## Verifiering
+
+Kontrollera att appen är aktiv:
 
 ```bash
-docker exec -u www-data <container_namn> php /var/www/html/occ app:list | grep booked_events_widget
+sudo -u www-data php occ app:list | grep booked_events_widget
 ```
 
-Du ska se att appen är enabled.
+Öppna sedan:
 
-## 5. Öppna appen
+```text
+https://din-nextcloud/apps/dashboard/
+```
 
-Dashboard-widgeten visas på dashboarden.
-
-Hanteringssidan nås på:
+Hanteringssidan finns på:
 
 ```text
 https://din-nextcloud/apps/booked_events_widget/
 ```
 
-Om dashboard-widgeten visas men menylänken inte gör det kan du öppna sidan direkt via URL:en ovan.
-
-## 6. Uppdatera appen efter ändringar
-
-Om du ändrar filer i appen och vill uppdatera en befintlig instans:
-
-1. kopiera in den nya appkoden igen
-2. sätt rätt rättigheter
-3. disable/enable appen
-
-Exempel:
-
-```bash
-sudo -u www-data php /var/www/html/occ app:disable booked_events_widget
-sudo -u www-data php /var/www/html/occ app:enable booked_events_widget
-```
-
-I Docker:
-
-```bash
-docker exec -u www-data <container_namn> php /var/www/html/occ app:disable booked_events_widget
-docker exec -u www-data <container_namn> php /var/www/html/occ app:enable booked_events_widget
-```
-
-## 7. Om något går fel
+## Om Något Går Fel
 
 Kontrollera:
 
 - att appen ligger i `custom_apps/booked_events_widget`
 - att filägaren är korrekt
-- att Nextcloud-versionen är 30 eller 31
+- att `getevent.sh` är körbar
+- att `data/events.json` finns och innehåller event
 - att appen verkligen är enabled
 
-Kolla också Nextcloud-loggen:
+Använd gärna:
 
 ```bash
-tail -f /var/www/html/data/nextcloud.log
+sudo -u www-data php occ maintenance:repair
 ```
 
-eller i Docker:
+och kontrollera loggen:
 
 ```bash
-docker exec -it <container_namn> tail -f /var/www/html/data/nextcloud.log
+tail -f /var/www/nextcloud/data/nextcloud.log
 ```
-
-## Relevanta filer
-
-- `apps/booked_events_widget/appinfo/info.xml`
-- `apps/booked_events_widget/appinfo/routes.php`
-- `apps/booked_events_widget/lib/Controller/PageController.php`
-- `apps/booked_events_widget/lib/Service/EventService.php`
-- `apps/booked_events_widget/lib/Migration/Version1100Date20260318181500.php`
-
-## Rekommenderat nästa steg för produktion
-
-Innan appen används skarpt bör du åtminstone:
-
-- återinföra riktig CSRF-hantering
-- validera formulärdata striktare
-- lägga till tydliga fel- och successmeddelanden
-- begränsa vem som får administrera event
