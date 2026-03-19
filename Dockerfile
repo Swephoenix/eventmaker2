@@ -2,6 +2,10 @@ FROM nextcloud:31-apache
 
 COPY apps/booked_events_widget /usr/src/nextcloud/custom_apps/booked_events_widget
 COPY getevent.sh /usr/local/bin/getevent.sh
+COPY docker/custom-entrypoint.sh /usr/local/bin/custom-entrypoint.sh
 
 RUN chown -R www-data:www-data /usr/src/nextcloud/custom_apps/booked_events_widget
-RUN chmod +x /usr/local/bin/getevent.sh
+RUN chmod +x /usr/local/bin/getevent.sh /usr/local/bin/custom-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/custom-entrypoint.sh"]
+CMD ["apache2-foreground"]

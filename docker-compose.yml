@@ -49,13 +49,14 @@ services:
         fi
 
         mkdir -p /var/www/html/custom_apps
+        chown www-data:www-data /var/www/html/custom_apps
         rm -rf /var/www/html/custom_apps/booked_events_widget
         cp -a /usr/src/nextcloud/custom_apps/booked_events_widget /var/www/html/custom_apps/booked_events_widget
         if [ -f "$$TMP_EVENTS_FILE" ]; then
           mkdir -p /var/www/html/custom_apps/booked_events_widget/data
           mv "$$TMP_EVENTS_FILE" /var/www/html/custom_apps/booked_events_widget/data/events.json
         fi
-        chown -R www-data:www-data /var/www/html/custom_apps/booked_events_widget
+        chown -R www-data:www-data /var/www/html/custom_apps
 
         echo "Enabling dashboard widget app..."
         occ app:disable booked_events_widget || true
@@ -80,11 +81,25 @@ services:
     depends_on:
       - nextcloud
     restart: unless-stopped
+    user: "33:33"
     command:
       - /bin/bash
       - -lc
       - |
         set -euo pipefail
+
+        occ() {
+          php /var/www/html/occ "$$@"
+        }
+
+        echo "Waiting for Nextcloud installation before updating events..."
+        until [ -f /var/www/html/config/config.php ]; do
+          sleep 5
+        done
+
+        until occ status 2>/dev/null | grep -q "installed: true"; do
+          sleep 5
+        done
 
         while true; do
           echo "Updating event feed..."
