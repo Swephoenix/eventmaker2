@@ -28,6 +28,7 @@ class PageController extends Controller {
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse {
 		\OCP\Util::addStyle(Application::APP_ID, 'manage');
+		\OCP\Util::addScript(Application::APP_ID, 'manage');
 
 		$events = array_map(function (array $event): array {
 			$event['updateUrl'] = $this->urlGenerator->linkToRoute(
