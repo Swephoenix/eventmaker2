@@ -49,6 +49,11 @@ class BookedEventsWidget implements IWidget {
 			'manageUrl',
 			\OC::$server->getURLGenerator()->linkToRoute('booked_events_widget.page.index'),
 		);
+		$this->initialStateService->provideInitialState(
+			Application::APP_ID,
+			'personnelUrl',
+			\OC::$server->getURLGenerator()->linkToRoute('booked_events_widget.page.index') . '?mode=eventpersonal',
+		);
 
 		\OCP\Util::addScript(Application::APP_ID, 'dashboard');
 		\OCP\Util::addStyle(Application::APP_ID, 'dashboard');

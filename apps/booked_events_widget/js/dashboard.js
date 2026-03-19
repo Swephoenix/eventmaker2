@@ -4,6 +4,7 @@
 
 	const events = OCP.InitialState.loadState(appId, 'events', [])
 	const manageUrl = OCP.InitialState.loadState(appId, 'manageUrl', '/apps/booked_events_widget/')
+	const personnelUrl = OCP.InitialState.loadState(appId, 'personnelUrl', `${manageUrl}?mode=eventpersonal`)
 	const upcomingEvents = events.filter((event) => !event.isPast)
 	const pastEvents = events.filter((event) => event.isPast)
 
@@ -43,6 +44,7 @@
 	const renderToolbar = (view) => `
 		<div class="bew-widget__actions">
 			<a class="bew-widget__link" href="${escapeHtml(manageUrl)}">Hantera event</a>
+			<a class="bew-widget__secondary-link" href="${escapeHtml(personnelUrl)}">Eventpersonal</a>
 			<button class="bew-widget__secondary" type="button" data-toggle-history="true">
 				${view === 'past' ? 'Kommande event' : 'Tidigare event'}
 			</button>

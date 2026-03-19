@@ -33,18 +33,25 @@ $clientEvents = array_map(static function (array $event): array {
 		'location' => $location,
 		'description' => (string)$event['description'],
 		'link' => (string)$event['link'],
+		'isApi' => (bool)($event['is_api'] ?? false),
 		'sortOrder' => (int)$event['sort_order'],
 		'updateUrl' => (string)$event['updateUrl'],
+		'saveStaffUrl' => (string)$event['saveStaffUrl'],
 		'deleteUrl' => (string)$event['deleteUrl'],
-		'staff' => [
-			['name' => 'Eventansvarig', 'role' => $title, 'area' => 'Övergripande ansvar och samordning'],
-			['name' => 'Representant', 'role' => 'På plats', 'area' => $location],
-			['name' => 'Volontär', 'role' => 'Stöd', 'area' => 'Material, välkomnande och praktiskt stöd'],
-		],
+		'staff' => array_values(array_map(static function (array $person): array {
+			return [
+				'userId' => (string)($person['userId'] ?? ''),
+				'firstName' => (string)($person['firstName'] ?? ''),
+				'lastName' => (string)($person['lastName'] ?? ''),
+				'email' => (string)($person['email'] ?? ''),
+				'role' => (string)($person['role'] ?? ''),
+				'area' => (string)($person['area'] ?? ''),
+			];
+		}, (array)($event['staff'] ?? []))),
 		'material' => [
-			['text' => 'Ta med rollup', 'done' => false],
-			['text' => 'Ta med flyers', 'done' => true],
-			['text' => 'Kontrollera länkinformation för ' . $title, 'done' => false],
+			['text' => 'Ta med rollup', 'done' => false, 'ownerUserId' => '', 'ownerName' => ''],
+			['text' => 'Ta med flyers', 'done' => true, 'ownerUserId' => '', 'ownerName' => ''],
+			['text' => 'Kontrollera länkinformation för ' . $title, 'done' => false, 'ownerUserId' => '', 'ownerName' => ''],
 		],
 		'marketing' => [
 			['city' => $location, 'mailSent' => 'Ja', 'facebookPages' => 'Lokala grupper och evenemangssidor', 'comment' => 'Prioritera orten närmast eventet'],
@@ -63,14 +70,21 @@ $clientEvents = array_map(static function (array $event): array {
 	class="bew-manage app"
 	data-requesttoken="<?php p($_['requesttoken']); ?>"
 	data-create-url="<?php p($_['createUrl']); ?>"
+	data-view-mode="<?php p((string)$_['viewMode']); ?>"
 >
-	<script id="bew-state" type="application/json"><?php print_unescaped(json_encode(['events' => $clientEvents], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?></script>
+	<script id="bew-state" type="application/json"><?php print_unescaped(json_encode(['events' => $clientEvents, 'users' => $_['users'], 'currentUser' => $_['currentUser']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?></script>
 
 	<section class="layout">
 		<aside class="sidebar">
 			<div class="sidebar-head">
 				<h2 class="sidebar-title">Booked events</h2>
 				<p class="sidebar-subtitle">Välj ett event i listan. Kortet till höger visar sammanfattning först och redigeringsytor direkt under.</p>
+				<?php if ((string)$_['viewMode'] === 'eventpersonal' && $_['currentUser'] !== null): ?>
+					<label class="sidebar-filter">
+						<input type="checkbox" id="bookedOnlyToggle">
+						<span>Visa bara event där jag är bokad</span>
+					</label>
+				<?php endif; ?>
 			</div>
 
 			<div class="event-list" id="eventList">

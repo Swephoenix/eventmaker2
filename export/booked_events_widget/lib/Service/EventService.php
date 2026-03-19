@@ -59,6 +59,8 @@ class EventService {
 				'description' => (string)($event['description'] ?? ''),
 				'link' => (string)($event['link'] ?? ''),
 				'sort_order' => (int)($event['sort_order'] ?? 0),
+				'source' => (string)($event['source'] ?? $this->detectSource($event)),
+				'staff' => $this->normalizeStaff((array)($event['staff'] ?? [])),
 			];
 		}, $events));
 	}
@@ -72,6 +74,8 @@ class EventService {
 			'description' => trim($description),
 			'link' => trim($link),
 			'sort_order' => $sortOrder,
+			'source' => 'manual',
+			'staff' => [],
 		];
 
 		$this->writeRawEvents($events);
@@ -84,14 +88,26 @@ class EventService {
 			return;
 		}
 
-		$events[$id] = [
-			'title' => trim($title),
-			'date' => trim($date),
-			'location' => trim($location),
-			'description' => trim($description),
-			'link' => trim($link),
-			'sort_order' => $sortOrder,
-		];
+		$existingEvent = $events[$id];
+		$isApiEvent = $this->isApiEvent($existingEvent);
+
+		$existingEvent['title'] = $isApiEvent
+			? $this->cleanText((string)($existingEvent['title'] ?? 'Event'))
+			: trim($title);
+		$existingEvent['date'] = $isApiEvent
+			? $this->cleanText((string)($existingEvent['date'] ?? ''))
+			: trim($date);
+		$existingEvent['location'] = $isApiEvent
+			? $this->cleanText((string)($existingEvent['location'] ?? ''))
+			: trim($location);
+		$existingEvent['description'] = trim($description);
+		$existingEvent['link'] = $isApiEvent
+			? trim((string)($existingEvent['link'] ?? ''))
+			: trim($link);
+		$existingEvent['sort_order'] = $sortOrder;
+		$existingEvent['source'] = $isApiEvent ? 'api' : 'manual';
+
+		$events[$id] = $existingEvent;
 
 		$this->writeRawEvents($events);
 	}
@@ -106,6 +122,20 @@ class EventService {
 		unset($events[$id]);
 
 		$this->writeRawEvents(array_values($events));
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $staff
+	 */
+	public function saveStaff(int $id, array $staff): void {
+		$events = $this->readRawEvents();
+
+		if (!isset($events[$id])) {
+			return;
+		}
+
+		$events[$id]['staff'] = $this->normalizeStaff($staff);
+		$this->writeRawEvents($events);
 	}
 
 	/**
@@ -199,9 +229,73 @@ class EventService {
 			'location' => $location,
 			'description' => $description,
 			'link' => $link,
+			'staff' => $this->normalizeStaff((array)($event['staff'] ?? []), $title, $location),
+			'is_api' => $this->isApiEvent($event),
 			'is_past' => $this->isPastEvent($month, $day),
 			'sort_order' => (int)($event['sort_order'] ?? (($index + 1) * 10)),
 		];
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $staff
+	 * @return list<array{userId: string, firstName: string, lastName: string, email: string, role: string, area: string}>
+	 */
+	private function normalizeStaff(array $staff, string $title = '', string $location = ''): array {
+		$normalized = array_values(array_filter(array_map(function (array $person): array {
+			return [
+				'userId' => trim((string)($person['userId'] ?? '')),
+				'firstName' => $this->cleanText((string)($person['firstName'] ?? '')),
+				'lastName' => $this->cleanText((string)($person['lastName'] ?? '')),
+				'email' => trim((string)($person['email'] ?? '')),
+				'role' => $this->cleanText((string)($person['role'] ?? '')),
+				'area' => $this->cleanText((string)($person['area'] ?? '')),
+			];
+		}, array_filter($staff, static fn ($person): bool => is_array($person))), static function (array $person): bool {
+			return $person['userId'] !== ''
+				|| $person['firstName'] !== ''
+				|| $person['lastName'] !== ''
+				|| $person['email'] !== ''
+				|| $person['role'] !== ''
+				|| $person['area'] !== '';
+		}));
+
+		if ($normalized !== []) {
+			return $normalized;
+		}
+
+		return [
+			['userId' => '', 'firstName' => 'Eventansvarig', 'lastName' => '', 'email' => '', 'role' => $title, 'area' => 'Övergripande ansvar och samordning'],
+			['userId' => '', 'firstName' => 'Representant', 'lastName' => '', 'email' => '', 'role' => 'På plats', 'area' => $location],
+			['userId' => '', 'firstName' => 'Volontär', 'lastName' => '', 'email' => '', 'role' => 'Stöd', 'area' => 'Material, välkomnande och praktiskt stöd'],
+		];
+	}
+
+	/**
+	 * @param array<string, mixed> $event
+	 */
+	private function detectSource(array $event): string {
+		return $this->isApiEvent($event) ? 'api' : 'manual';
+	}
+
+	/**
+	 * @param array<string, mixed> $event
+	 */
+	private function isApiEvent(array $event): bool {
+		$source = (string)($event['source'] ?? '');
+		if ($source === 'api') {
+			return true;
+		}
+		if ($source === 'manual') {
+			return false;
+		}
+
+		foreach (['month', 'day', 'time', 'place'] as $key) {
+			if ($this->cleanText((string)($event[$key] ?? '')) !== '') {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function isPastEvent(string $month, string $day): bool {

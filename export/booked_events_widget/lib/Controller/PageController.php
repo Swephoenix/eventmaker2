@@ -13,6 +13,9 @@ use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\IRequest;
 use OCP\IURLGenerator;
+use OCP\IUser;
+use OCP\IUserManager;
+use OCP\IUserSession;
 
 class PageController extends Controller {
 	public function __construct(
@@ -20,6 +23,8 @@ class PageController extends Controller {
 		IRequest $request,
 		private EventService $eventService,
 		private IURLGenerator $urlGenerator,
+		private IUserManager $userManager,
+		private IUserSession $userSession,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -27,12 +32,21 @@ class PageController extends Controller {
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
 	public function index(): TemplateResponse {
+		$viewMode = (string)$this->request->getParam('mode', 'admin');
+		if ($viewMode !== 'eventpersonal') {
+			$viewMode = 'admin';
+		}
+
 		\OCP\Util::addStyle(Application::APP_ID, 'manage');
 		\OCP\Util::addScript(Application::APP_ID, 'manage');
 
 		$events = array_map(function (array $event): array {
 			$event['updateUrl'] = $this->urlGenerator->linkToRoute(
 				'booked_events_widget.page.update',
+				['id' => (int)$event['id']],
+			);
+			$event['saveStaffUrl'] = $this->urlGenerator->linkToRoute(
+				'booked_events_widget.page.saveStaff',
 				['id' => (int)$event['id']],
 			);
 			$event['deleteUrl'] = $this->urlGenerator->linkToRoute(
@@ -46,6 +60,9 @@ class PageController extends Controller {
 		return new TemplateResponse(Application::APP_ID, 'manage', [
 			'events' => $events,
 			'createUrl' => $this->urlGenerator->linkToRoute('booked_events_widget.page.create'),
+			'users' => $this->getAvailableUsers(),
+			'currentUser' => $this->getCurrentUser(),
+			'viewMode' => $viewMode,
 		]);
 	}
 
@@ -82,6 +99,22 @@ class PageController extends Controller {
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
+	public function saveStaff(int $id, string $staff_json = '[]'): RedirectResponse {
+		$staff = json_decode($staff_json, true);
+		if (!is_array($staff)) {
+			$staff = [];
+		}
+
+		$this->eventService->saveStaff(
+			$id,
+			array_values(array_filter($staff, static fn ($row): bool => is_array($row))),
+		);
+
+		return $this->redirectToIndex();
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
 	public function delete(int $id): RedirectResponse {
 		$this->eventService->deleteEvent($id);
 
@@ -92,5 +125,48 @@ class PageController extends Controller {
 		return new RedirectResponse(
 			$this->urlGenerator->linkToRoute('booked_events_widget.page.index'),
 		);
+	}
+
+	/**
+	 * @return list<array{id: string, label: string, email: string, firstName: string, lastName: string}>
+	 */
+	private function getAvailableUsers(): array {
+		$users = array_map(function (IUser $user): array {
+			$displayName = trim($user->getDisplayName() ?? '');
+			$userId = $user->getUID();
+			$email = trim((string)$user->getEMailAddress());
+			$nameParts = preg_split('/\s+/', $displayName, 2) ?: [];
+			$firstName = trim((string)($nameParts[0] ?? $displayName));
+			$lastName = trim((string)($nameParts[1] ?? ''));
+
+			return [
+				'id' => $userId,
+				'label' => $displayName !== '' ? $displayName : $userId,
+				'email' => $email,
+				'firstName' => $firstName,
+				'lastName' => $lastName,
+			];
+		}, $this->userManager->search(''));
+
+		usort($users, static fn (array $left, array $right): int => strcasecmp($left['label'], $right['label']));
+
+		return $users;
+	}
+
+	/**
+	 * @return array{id: string, label: string}|null
+	 */
+	private function getCurrentUser(): ?array {
+		$user = $this->userSession->getUser();
+		if ($user === null) {
+			return null;
+		}
+
+		$displayName = trim($user->getDisplayName() ?? '');
+
+		return [
+			'id' => $user->getUID(),
+			'label' => $displayName !== '' ? $displayName : $user->getUID(),
+		];
 	}
 }
