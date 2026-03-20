@@ -31,6 +31,7 @@
 	const mainTitle = document.getElementById('mainTitle');
 	const mainDateBadge = document.getElementById('mainDateBadge');
 	const mainLocationBadge = document.getElementById('mainLocationBadge');
+	const mainDemoNote = document.getElementById('mainDemoNote');
 	const chatInput = document.getElementById('chatInput');
 	const chatBox = document.getElementById('chatBox');
 	const sendBtn = document.getElementById('sendBtn');
@@ -788,12 +789,18 @@
 			mainTitle.textContent = 'Inga event';
 			mainDateBadge.textContent = 'Datum saknas';
 			mainLocationBadge.textContent = 'Plats saknas';
+			if (mainDemoNote) {
+				mainDemoNote.hidden = true;
+			}
 			return;
 		}
 
 		mainTitle.textContent = event.title;
 		mainDateBadge.textContent = event.date;
 		mainLocationBadge.textContent = event.location;
+		if (mainDemoNote) {
+			mainDemoNote.hidden = event.isDemo !== true;
+		}
 	}
 
 	function renderChat() {

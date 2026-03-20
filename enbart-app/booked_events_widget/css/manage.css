@@ -293,9 +293,17 @@
 	flex: 0 0 auto;
 }
 
+.bew-manage .main-title-line {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-bottom: 6px;
+}
+
 .bew-manage .main-title h2,
 .bew-manage #mainTitle {
-	margin: 0 0 6px;
+	margin: 0;
 	font-size: 26px;
 	line-height: 1.06;
 	font-weight: 850;
@@ -306,6 +314,18 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
+}
+
+.bew-manage .main-note[hidden] {
+	display: none;
+}
+
+.bew-manage .main-note {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.4;
+	font-weight: 700;
+	color: #5c6d80;
 }
 
 .bew-manage .demo-banner-row[hidden] {

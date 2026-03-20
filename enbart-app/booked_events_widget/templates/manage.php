@@ -165,7 +165,10 @@ if ((string)$_['viewMode'] === 'admin') {
 				<div class="main-kicker">Redigera</div>
 				<div class="main-title-row">
 					<div class="main-title">
-						<h2 id="mainTitle">Event</h2>
+						<div class="main-title-line">
+							<h2 id="mainTitle">Event</h2>
+							<p class="main-note" id="mainDemoNote" hidden>Obs. Detta är demo. Går inte att ändra.</p>
+						</div>
 						<div class="main-meta">
 							<span class="badge" id="mainDateBadge">Datum</span>
 							<span class="badge" id="mainLocationBadge">Plats</span>
