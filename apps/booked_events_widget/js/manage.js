@@ -17,6 +17,12 @@
 		bookedOnly: false,
 		currentUser,
 		events: Object.fromEntries(events.map((event) => [String(event.id), event])),
+		dirty: false,
+		dirtyEventId: null,
+		dirtyTab: '',
+		dirtySnapshot: null,
+		submitting: false,
+		pendingNavigation: null,
 	};
 
 	const dynamicContent = document.getElementById('dynamicContent');
@@ -28,10 +34,18 @@
 	const chatInput = document.getElementById('chatInput');
 	const chatBox = document.getElementById('chatBox');
 	const sendBtn = document.getElementById('sendBtn');
+	const printSummaryBtn = document.getElementById('printSummaryBtn');
+	const discardChangesBtn = document.getElementById('discardChangesBtn');
 	const bookedOnlyToggle = document.getElementById('bookedOnlyToggle');
+	const unsavedModal = document.getElementById('unsavedModal');
+	const unsavedModalMessage = document.getElementById('unsavedModalMessage');
+	const unsavedSaveBtn = document.getElementById('unsavedSaveBtn');
+	const unsavedDiscardBtn = document.getElementById('unsavedDiscardBtn');
+	const unsavedStayBtn = document.getElementById('unsavedStayBtn');
 	const requesttoken = root.dataset.requesttoken || '';
 	const stateUrl = root.dataset.stateUrl || '';
 	const viewMode = root.dataset.viewMode || 'admin';
+	let printFrame = null;
 
 	function escapeHtml(str) {
 		return String(str)
@@ -48,6 +62,175 @@
 
 	function getAvailableUser(userId) {
 		return state.availableUsers.find((user) => user.id === userId) || null;
+	}
+
+	function cloneEvent(event) {
+		return JSON.parse(JSON.stringify(event));
+	}
+
+	function updateDirtyUi() {
+		if (discardChangesBtn) {
+			discardChangesBtn.hidden = !state.dirty || viewMode === 'eventpersonal';
+		}
+	}
+
+	function resetDirtyState() {
+		state.dirty = false;
+		state.dirtyEventId = null;
+		state.dirtyTab = '';
+		state.dirtySnapshot = null;
+		updateDirtyUi();
+	}
+
+	function markDirty() {
+		if (viewMode === 'eventpersonal') {
+			return;
+		}
+
+		const event = getActiveEvent();
+		if (!event) {
+			return;
+		}
+
+		if (!state.dirty) {
+			state.dirty = true;
+			state.dirtyEventId = event.id;
+			state.dirtyTab = state.activeTab;
+			state.dirtySnapshot = cloneEvent(event);
+		}
+
+		updateDirtyUi();
+	}
+
+	function discardCurrentChanges() {
+		if (!state.dirty || state.dirtyEventId === null || !state.dirtySnapshot) {
+			return;
+		}
+
+		state.events[String(state.dirtyEventId)] = cloneEvent(state.dirtySnapshot);
+		resetDirtyState();
+		render();
+	}
+
+	function blockIfDirty() {
+		if (!state.dirty) {
+			return Promise.resolve('continue');
+		}
+
+		return new Promise((resolve) => {
+			state.pendingNavigation = resolve;
+			if (unsavedModalMessage) {
+				unsavedModalMessage.textContent = 'Du har osparade ändringar i den här vyn. Vill du spara dem innan du fortsätter?';
+			}
+			if (unsavedSaveBtn) {
+				unsavedSaveBtn.disabled = false;
+				unsavedSaveBtn.textContent = 'Spara ändringar';
+			}
+			if (unsavedModal) {
+				unsavedModal.hidden = false;
+			}
+		});
+	}
+
+	function closeUnsavedModal(result) {
+		if (unsavedModal) {
+			unsavedModal.hidden = true;
+		}
+		const resolver = state.pendingNavigation;
+		state.pendingNavigation = null;
+		if (resolver) {
+			resolver(result);
+		}
+	}
+
+	async function persistOverview(event) {
+		const body = new URLSearchParams({
+			requesttoken,
+			title: String(event.title || ''),
+			date: String(event.date || ''),
+			location: String(event.location || ''),
+			description: String(event.description || ''),
+			link: String(event.link || ''),
+			sort_order: String(event.sortOrder || 0),
+		});
+
+		const response = await fetch(event.updateUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+			},
+			body: body.toString(),
+			credentials: 'same-origin',
+		});
+
+		if (!response.ok) {
+			throw new Error('overview-save-failed');
+		}
+	}
+
+	async function persistStaff(event) {
+		const body = new URLSearchParams({
+			requesttoken,
+			staff_json: serializeStaff(event.staff),
+		});
+
+		const response = await fetch(event.saveStaffUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+			},
+			body: body.toString(),
+			credentials: 'same-origin',
+		});
+
+		if (!response.ok) {
+			throw new Error('staff-save-failed');
+		}
+	}
+
+	async function saveCurrentChanges() {
+		const event = getActiveEvent();
+		if (!event) {
+			return false;
+		}
+
+		if (state.activeTab === 'overview') {
+			await persistOverview(event);
+			resetDirtyState();
+			return true;
+		}
+
+		if (state.activeTab === 'staff') {
+			await persistStaff(event);
+			resetDirtyState();
+			return true;
+		}
+
+		if (unsavedModalMessage) {
+			unsavedModalMessage.textContent = 'Den här vyn har ännu ingen separat sparknapp. Välj "Spara inte ändringar" för att fortsätta.';
+		}
+		return false;
+	}
+
+	function ensureEventOwnerRow(event) {
+		if (!Array.isArray(event.staff)) {
+			event.staff = [];
+		}
+
+		const ownerIndex = event.staff.findIndex((person) => String(person.role || '').trim().toLowerCase() === 'eventansvarig');
+		const ownerRow = ownerIndex >= 0 ? event.staff.splice(ownerIndex, 1)[0] : { userId: '', firstName: '', lastName: '', email: '', role: 'Eventansvarig', area: '' };
+		ownerRow.role = 'Eventansvarig';
+		event.staff.unshift(ownerRow);
+	}
+
+	function getEventOwner(event) {
+		ensureEventOwnerRow(event);
+		return event.staff[0] || null;
+	}
+
+	function getPersonDisplayName(person) {
+		const selectedUser = person?.userId ? getAvailableUser(person.userId) : null;
+		return [person?.firstName, person?.lastName].filter(Boolean).join(' ').trim() || selectedUser?.label || 'Inte tilldelad';
 	}
 
 	function getMessageTone(message) {
@@ -80,6 +263,43 @@
 		}
 
 		return parts.join(' • ');
+	}
+
+	function formatTimestamp(value) {
+		if (!value) {
+			return '';
+		}
+
+		const parsedDate = new Date(value);
+		if (Number.isNaN(parsedDate.getTime())) {
+			return String(value);
+		}
+
+		return parsedDate.toLocaleString('sv-SE', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		});
+	}
+
+	function formatFileSize(bytes) {
+		const size = Number(bytes || 0);
+		if (!Number.isFinite(size) || size <= 0) {
+			return 'Okänd storlek';
+		}
+		if (size < 1024) {
+			return `${size} B`;
+		}
+		if (size < 1024 * 1024) {
+			return `${(size / 1024).toFixed(1)} KB`;
+		}
+		return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function formatDocumentDate(value) {
+		return formatTimestamp(value) || 'Okänt datum';
 	}
 
 	function normalizeIdentity(value) {
@@ -218,6 +438,274 @@
 		`;
 	}
 
+	function buildPrintRows(items) {
+		return items.map((item) => `
+			<tr>
+				<td>${escapeHtml(item.label)}</td>
+				<td>${item.value}</td>
+			</tr>
+		`).join('');
+	}
+
+	function buildPrintTable(title, rows) {
+		if (!rows.length) {
+			return `
+				<section class="print-section">
+					<h2>${escapeHtml(title)}</h2>
+					<p class="print-empty">Ingen information tillagd.</p>
+				</section>
+			`;
+		}
+
+		return `
+			<section class="print-section">
+				<h2>${escapeHtml(title)}</h2>
+				<table class="print-table">
+					<tbody>${rows}</tbody>
+				</table>
+			</section>
+		`;
+	}
+
+	function buildPrintableSummary(event) {
+		const accent = getEventAccent(event.id);
+		const eventOwner = getEventOwner(event);
+		const staffRows = Array.isArray(event.staff) ? event.staff.map((person) => {
+			const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
+			const fullName = [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || selectedUser?.label || 'Inte tilldelad';
+			const email = person.userId ? (selectedUser?.email || person.email || 'Saknas') : (person.email || 'Saknas');
+			return `
+				<tr>
+					<td>${escapeHtml(person.role || 'Saknas')}</td>
+					<td>${escapeHtml(fullName)}</td>
+					<td>${escapeHtml(person.area || 'Saknas')}</td>
+					<td>${escapeHtml(email)}</td>
+				</tr>
+			`;
+		}).join('') : '';
+
+		const materialRows = Array.isArray(event.material) ? event.material.map((item) => `
+			<tr>
+				<td>${item.done ? 'Klar' : 'Ej klar'}</td>
+				<td>${escapeHtml(item.text || 'Tom punkt')}</td>
+				<td>${escapeHtml((item.ownerUserId ? (getAvailableUser(item.ownerUserId)?.label || item.ownerName) : item.ownerName) || 'Saknas')}</td>
+				<td>${escapeHtml(item.notes || 'Saknas')}</td>
+			</tr>
+		`).join('') : '';
+
+		const marketingRows = Array.isArray(event.marketing) ? event.marketing.map((row) => `
+			<tr>
+				<td>${escapeHtml(row.city || 'Ort saknas')}</td>
+				<td>${escapeHtml(row.mailSent || 'Saknas')}</td>
+				<td>${escapeHtml(row.facebookPages || 'Saknas')}</td>
+				<td>${escapeHtml(row.comment || 'Saknas')}</td>
+			</tr>
+		`).join('') : '';
+
+		const documentRows = Array.isArray(event.documents) ? event.documents.map((document) => `
+			<tr>
+				<td>${escapeHtml(document.name || 'Fil')}</td>
+				<td>${escapeHtml(formatFileSize(document.size))}</td>
+				<td>${escapeHtml(formatTimestamp(document.uploadedAt) || 'Okänt datum')}</td>
+			</tr>
+		`).join('') : '';
+
+		return `<!doctype html>
+<html lang="sv">
+<head>
+	<meta charset="utf-8">
+	<title>${escapeHtml(event.title)} - sammanfattning</title>
+	<style>
+		:root {
+			--accent: ${accent.border};
+			--accent-soft: ${accent.card};
+			--text: #17324a;
+			--muted: #5b7590;
+			--line: rgba(23, 50, 74, 0.14);
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			padding: 28px;
+			font-family: Inter, Arial, sans-serif;
+			color: var(--text);
+			background: #ffffff;
+		}
+		.print-shell {
+			max-width: 1100px;
+			margin: 0 auto;
+		}
+		.print-hero {
+			padding: 24px;
+			border: 2px solid var(--accent);
+			border-radius: 22px;
+			background: linear-gradient(180deg, var(--accent-soft) 0%, #ffffff 100%);
+			margin-bottom: 22px;
+		}
+		.print-kicker {
+			font-size: 11px;
+			font-weight: 800;
+			letter-spacing: 0.14em;
+			text-transform: uppercase;
+			color: var(--muted);
+			margin-bottom: 10px;
+		}
+		.print-title {
+			font-size: 34px;
+			line-height: 1.05;
+			font-weight: 800;
+			margin: 0 0 12px;
+		}
+		.print-badges {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			margin-bottom: 12px;
+		}
+		.print-badge {
+			display: inline-flex;
+			align-items: center;
+			min-height: 32px;
+			padding: 0 12px;
+			border-radius: 999px;
+			background: #ffffff;
+			border: 1px solid var(--line);
+			font-size: 13px;
+			font-weight: 700;
+		}
+		.print-copy {
+			margin: 0;
+			font-size: 14px;
+			line-height: 1.6;
+			color: var(--text);
+		}
+		.print-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 18px;
+		}
+		.print-section {
+			border: 1px solid var(--line);
+			border-radius: 18px;
+			padding: 18px;
+			margin-bottom: 18px;
+			break-inside: avoid;
+		}
+		.print-section h2 {
+			margin: 0 0 12px;
+			font-size: 18px;
+			line-height: 1.1;
+		}
+		.print-table {
+			width: 100%;
+			border-collapse: collapse;
+		}
+		.print-table td,
+		.print-table th {
+			padding: 10px 0;
+			border-bottom: 1px solid var(--line);
+			vertical-align: top;
+			font-size: 13px;
+			line-height: 1.45;
+			text-align: left;
+		}
+		.print-table tr:last-child td,
+		.print-table tr:last-child th {
+			border-bottom: 0;
+		}
+		.print-table td:first-child,
+		.print-table th:first-child {
+			width: 28%;
+			color: var(--muted);
+			font-weight: 700;
+			padding-right: 16px;
+		}
+		.print-empty {
+			margin: 0;
+			color: var(--muted);
+			font-size: 13px;
+		}
+		.print-link {
+			color: var(--accent);
+			text-decoration: none;
+			font-weight: 700;
+		}
+		@media print {
+			body { padding: 0; }
+		}
+	</style>
+</head>
+<body>
+	<div class="print-shell">
+		<section class="print-hero">
+			<div class="print-kicker">Eventsammanfattning</div>
+			<h1 class="print-title">${escapeHtml(event.title)}</h1>
+			<div class="print-badges">
+				<span class="print-badge">${escapeHtml(event.date)}</span>
+				<span class="print-badge">${escapeHtml(event.location)}</span>
+				<span class="print-badge">Eventansvarig: ${escapeHtml(getPersonDisplayName(eventOwner))}</span>
+			</div>
+			<p class="print-copy">${escapeHtml(event.description || 'Ingen intern anteckning tillagd ännu.')}</p>
+		</section>
+
+		<div class="print-grid">
+			${buildPrintTable('Översikt', buildPrintRows([
+				{ label: 'Titel', value: escapeHtml(event.title) },
+				{ label: 'Datum', value: escapeHtml(event.date) },
+				{ label: 'Plats', value: escapeHtml(event.location) },
+				{ label: 'Eventansvarig', value: escapeHtml(getPersonDisplayName(eventOwner)) },
+				{ label: 'Länk', value: event.link ? `<a class="print-link" href="${escapeHtml(event.link)}" target="_blank" rel="noreferrer">${escapeHtml(event.link)}</a>` : 'Saknas' },
+			]))}
+			${staffRows ? `
+				<section class="print-section">
+					<h2>Personal</h2>
+					<table class="print-table">
+						<thead>
+							<tr><th>Roll</th><th>Person</th><th>Ansvar</th><th>E-post</th></tr>
+						</thead>
+						<tbody>${staffRows}</tbody>
+					</table>
+				</section>
+			` : `<section class="print-section"><h2>Personal</h2><p class="print-empty">Ingen personal tillagd.</p></section>`}
+			${materialRows ? `
+				<section class="print-section">
+					<h2>Material</h2>
+					<table class="print-table">
+						<thead>
+							<tr><th>Status</th><th>Moment</th><th>Ansvarig</th><th>Anteckning</th></tr>
+						</thead>
+						<tbody>${materialRows}</tbody>
+					</table>
+				</section>
+			` : `<section class="print-section"><h2>Material</h2><p class="print-empty">Inga materialpunkter tillagda.</p></section>`}
+			${marketingRows ? `
+				<section class="print-section">
+					<h2>Marknadsföring</h2>
+					<table class="print-table">
+						<thead>
+							<tr><th>Ort</th><th>Mejl</th><th>Facebook</th><th>Kommentar</th></tr>
+						</thead>
+						<tbody>${marketingRows}</tbody>
+					</table>
+				</section>
+			` : `<section class="print-section"><h2>Marknadsföring</h2><p class="print-empty">Ingen marknadsföringsdata tillagd.</p></section>`}
+			${documentRows ? `
+				<section class="print-section">
+					<h2>Dokumentation</h2>
+					<table class="print-table">
+						<thead>
+							<tr><th>Fil</th><th>Storlek</th><th>Uppladdad</th></tr>
+						</thead>
+						<tbody>${documentRows}</tbody>
+					</table>
+				</section>
+			` : `<section class="print-section"><h2>Dokumentation</h2><p class="print-empty">Inga dokument uppladdade.</p></section>`}
+		</div>
+	</div>
+</body>
+</html>`;
+	}
+
 	function parseEventDateRange(dateText) {
 		const normalized = String(dateText || '')
 			.toLowerCase()
@@ -308,6 +796,13 @@
 			})
 			.join('');
 		chatBox.scrollTop = chatBox.scrollHeight;
+		if (chatInput) {
+			chatInput.disabled = event.isDemo === true;
+			chatInput.placeholder = event.isDemo === true ? 'Chatten är låst i demoeventet' : 'Skriv ett meddelande och tryck Enter';
+		}
+		if (sendBtn) {
+			sendBtn.disabled = event.isDemo === true;
+		}
 	}
 
 	function attachOverviewBindings() {
@@ -323,6 +818,7 @@
 			}
 
 			input.addEventListener('input', (e) => {
+				markDirty();
 				event[key] = e.target.value;
 				if (updateHeader) {
 					renderHeader();
@@ -346,6 +842,7 @@
 		}
 
 		const isApiEvent = event.isApi === true;
+		const isDemoEvent = event.isDemo === true;
 		const lockedAttr = isApiEvent ? 'readonly aria-readonly="true"' : '';
 		const calendarMarkup = buildCalendarMarkup(event.date);
 
@@ -353,41 +850,41 @@
 			<div class="panel-head">
 				<div>
 					<h3 class="panel-title">Översikt</h3>
-					<p class="panel-copy">Här redigerar du grunduppgifter för eventet. Fälten är utformade för snabb överblick och enkel uppdatering.</p>
+					<p class="panel-copy">${isDemoEvent ? 'Det här är ett låst demoevent för planeringsvyn. Innehållet finns här för att visa hur en mässa kan planeras.' : 'Här redigerar du grunduppgifter för eventet. Fälten är utformade för snabb överblick och enkel uppdatering.'}</p>
 				</div>
 				<div class="actions">
 					${event.link ? `<a class="btn btn-secondary" href="${escapeHtml(event.link)}" target="_blank" rel="noreferrer">Förhandsgranska</a>` : `<button class="btn btn-secondary" type="button" disabled>Förhandsgranska</button>`}
-					<button class="btn btn-primary" type="submit" form="overviewForm">Spara ändringar</button>
+					${isDemoEvent ? `<button class="btn btn-primary" type="button" disabled>Demoevent</button>` : `<button class="btn btn-primary" type="submit" form="overviewForm">Spara ändringar</button>`}
 				</div>
 			</div>
 
-			<form id="overviewForm" action="${escapeHtml(event.updateUrl)}" method="post">
+			<form id="overviewForm" action="${escapeHtml(event.updateUrl || '#')}" method="post">
 				<input type="hidden" name="requesttoken" value="${escapeHtml(requesttoken)}">
 
 				<div class="section-block">
 					<h4>Grunduppgifter</h4>
-					<p>${isApiEvent ? 'Titel, datum, plats och länk är låsta eftersom eventet hämtas via API. Endast intern anteckning kan ändras här.' : 'Titel, datum, plats och sortering visas här som redigerbara fält.'}</p>
+					<p>${isDemoEvent ? 'Det här demoeventet är låst och används bara för att visa ett exempel på en mässplanering.' : (isApiEvent ? 'Titel, datum, plats och länk är låsta eftersom eventet hämtas via API. Endast intern anteckning kan ändras här.' : 'Titel, datum, plats och sortering visas här som redigerbara fält.')}</p>
 
 					<div class="form-grid">
 						<div class="field full">
 							<label for="overview-title">Titel</label>
-							<input class="input" id="overview-title" type="text" name="title" value="${escapeHtml(event.title)}" ${lockedAttr} required>
+							<input class="input" id="overview-title" type="text" name="title" value="${escapeHtml(event.title)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} required>
 						</div>
 
 						<div class="field">
 							<label for="overview-date">Datum</label>
-							<input class="input" id="overview-date" type="text" name="date" value="${escapeHtml(event.date)}" ${lockedAttr} required>
+							<input class="input" id="overview-date" type="text" name="date" value="${escapeHtml(event.date)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} required>
 						</div>
 						<input type="hidden" name="sort_order" value="${escapeHtml(event.sortOrder)}">
 
 						<div class="field full">
 							<label for="overview-location">Plats</label>
-							<input class="input" id="overview-location" type="text" name="location" value="${escapeHtml(event.location)}" ${lockedAttr} required>
+							<input class="input" id="overview-location" type="text" name="location" value="${escapeHtml(event.location)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} required>
 						</div>
 
 						<div class="field full">
 							<label for="overview-link">Länk</label>
-							<input class="input" id="overview-link" type="url" name="link" value="${escapeHtml(event.link)}" ${lockedAttr}>
+							<input class="input" id="overview-link" type="url" name="link" value="${escapeHtml(event.link)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr}>
 						</div>
 					</div>
 				</div>
@@ -403,21 +900,29 @@
 					<p>Popuptexten används som fördjupning i widgeten när användaren öppnar eventet.</p>
 					<div class="field">
 						<label for="overview-description">Popuptext</label>
-						<textarea class="textarea" id="overview-description" name="description">${escapeHtml(event.description)}</textarea>
+						<textarea class="textarea" id="overview-description" name="description" ${isDemoEvent ? 'readonly aria-readonly="true"' : ''}>${escapeHtml(event.description)}</textarea>
 					</div>
-					<div class="small">Ändringarna sparas när du klickar på Spara ändringar.</div>
+					<div class="small">${isDemoEvent ? 'Demoeventet kan inte sparas.' : 'Ändringarna sparas när du klickar på Spara ändringar.'}</div>
 				</div>
 			</form>
 
 			<div class="section-block">
 				<h4>Publicering</h4>
 				<p>Ta bort eventet om det inte längre ska visas i dashboard-widgeten.</p>
-				<form action="${escapeHtml(event.deleteUrl)}" method="post">
+				<form action="${escapeHtml(event.deleteUrl || '#')}" method="post">
 					<input type="hidden" name="requesttoken" value="${escapeHtml(requesttoken)}">
-					<button class="btn btn-accent" type="submit">Ta bort event</button>
+					<button class="btn btn-accent" type="submit" ${isDemoEvent ? 'disabled' : ''}>${isDemoEvent ? 'Demoevent kan inte tas bort' : 'Ta bort event'}</button>
 				</form>
 			</div>
 		`;
+
+		const overviewForm = document.getElementById('overviewForm');
+		if (overviewForm) {
+			overviewForm.addEventListener('submit', () => {
+				state.submitting = true;
+				resetDirtyState();
+			});
+		}
 
 		attachOverviewBindings();
 	}
@@ -428,6 +933,7 @@
 			return;
 		}
 
+		const eventOwner = getEventOwner(event);
 		const calendarMarkup = buildCalendarMarkup(event.date);
 		dynamicContent.innerHTML = `
 			<div class="panel-head">
@@ -444,6 +950,7 @@
 						<div><span>Titel</span><strong>${escapeHtml(event.title)}</strong></div>
 						<div><span>Datum</span><strong>${escapeHtml(event.date)}</strong></div>
 						<div><span>Plats</span><strong>${escapeHtml(event.location)}</strong></div>
+						<div><span>Eventansvarig</span><strong>${escapeHtml(getPersonDisplayName(eventOwner))}</strong></div>
 						<div><span>Länk</span><strong>${event.link ? `<a href="${escapeHtml(event.link)}" target="_blank" rel="noreferrer">Öppna</a>` : 'Saknas'}</strong></div>
 					</div>
 				</div>
@@ -465,6 +972,8 @@
 		if (!event || !dynamicContent) {
 			return;
 		}
+
+		ensureEventOwnerRow(event);
 
 		dynamicContent.innerHTML = `
 			<div class="panel-head">
@@ -498,11 +1007,12 @@
 								${(() => {
 									const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
 									const hasManualDetails = Boolean(person.firstName || person.lastName || person.email);
-									const isManual = !person.userId && hasManualDetails;
+									const isManual = person.isExternal === true || (!person.userId && hasManualDetails);
 									const selectedValue = person.userId || (isManual ? '__external__' : '');
+									const isEventOwner = index === 0;
 									return `
 								<tr>
-									<td><input class="table-input" data-type="role" data-index="${index}" value="${escapeHtml(person.role)}"></td>
+									<td><input class="table-input" data-type="role" data-index="${index}" value="${escapeHtml(person.role)}" ${isEventOwner ? 'readonly aria-readonly="true"' : ''}></td>
 									<td>
 										<div class="staff-person-cell">
 											<select class="table-select staff-user-select" data-index="${index}">
@@ -526,7 +1036,7 @@
 									<td>
 										<input class="table-input staff-email-input" data-index="${index}" value="${escapeHtml(isManual ? (person.email || '') : (selectedUser?.email || ''))}" ${isManual ? '' : 'readonly aria-readonly="true"'} placeholder="mejl@example.com">
 									</td>
-									<td><button class="icon-btn remove-person" type="button" data-index="${index}" aria-label="Ta bort person">×</button></td>
+									<td>${isEventOwner ? '<span class="small">Fast roll</span>' : `<button class="icon-btn remove-person" type="button" data-index="${index}" aria-label="Ta bort person">×</button>`}</td>
 								</tr>
 									`;
 								})()}
@@ -545,11 +1055,14 @@
 				const userId = !isExternal ? selectedValue : '';
 				const selectedUser = userId ? getAvailableUser(userId) : null;
 
+				markDirty();
 				event.staff[index].userId = userId;
+				event.staff[index].isExternal = isExternal;
 				if (selectedUser) {
 					event.staff[index].firstName = selectedUser.firstName || '';
 					event.staff[index].lastName = selectedUser.lastName || '';
 					event.staff[index].email = selectedUser.email || '';
+					event.staff[index].isExternal = false;
 				} else if (!isExternal) {
 					event.staff[index].firstName = '';
 					event.staff[index].lastName = '';
@@ -563,6 +1076,7 @@
 			input.addEventListener('input', (e) => {
 				const index = Number(e.target.dataset.index);
 				const field = e.target.dataset.field;
+				markDirty();
 				event.staff[index][field] = e.target.value;
 			});
 		});
@@ -571,6 +1085,7 @@
 			input.addEventListener('input', (e) => {
 				const index = Number(e.target.dataset.index);
 				if (!event.staff[index].userId) {
+					markDirty();
 					event.staff[index].email = e.target.value;
 				}
 			});
@@ -580,6 +1095,12 @@
 			input.addEventListener('input', (e) => {
 				const index = Number(e.target.dataset.index);
 				const type = e.target.dataset.type;
+				if (index === 0 && type === 'role') {
+					e.target.value = 'Eventansvarig';
+					event.staff[index].role = 'Eventansvarig';
+					return;
+				}
+				markDirty();
 				event.staff[index][type] = e.target.value;
 			});
 		});
@@ -587,6 +1108,7 @@
 		dynamicContent.querySelectorAll('.remove-person').forEach((btn) => {
 			btn.addEventListener('click', (e) => {
 				const index = Number(e.currentTarget.dataset.index);
+				markDirty();
 				event.staff.splice(index, 1);
 				renderStaff();
 			});
@@ -595,7 +1117,8 @@
 		const addBtn = document.getElementById('addPersonBtn');
 		if (addBtn) {
 			addBtn.addEventListener('click', () => {
-				event.staff.push({ userId: '', firstName: '', lastName: '', email: '', role: '', area: '' });
+				markDirty();
+				event.staff.push({ userId: '', firstName: '', lastName: '', email: '', role: '', area: '', isExternal: false });
 				renderStaff();
 			});
 		}
@@ -624,6 +1147,7 @@
 						throw new Error('save_failed');
 					}
 
+					resetDirtyState();
 					saveBtn.textContent = 'Sparat';
 				} catch (error) {
 					saveBtn.textContent = 'Kunde inte spara';
@@ -643,6 +1167,8 @@
 			return;
 		}
 
+		ensureEventOwnerRow(event);
+
 		dynamicContent.innerHTML = `
 			<div class="panel-head">
 				<div>
@@ -653,7 +1179,7 @@
 			<div class="summary-stack">
 				${event.staff.map((person) => {
 					const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
-					const fullName = [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || selectedUser?.label || 'Namn saknas';
+					const fullName = [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || selectedUser?.label || 'Inte tilldelad';
 					const email = person.userId ? (selectedUser?.email || person.email || 'Saknas') : (person.email || 'Saknas');
 					return `
 						<div class="section-block summary-card">
@@ -731,6 +1257,7 @@
 		dynamicContent.querySelectorAll('.check').forEach((box) => {
 			box.addEventListener('change', (e) => {
 				const index = Number(e.target.dataset.index);
+				markDirty();
 				event.material[index].done = e.target.checked;
 				renderMaterial();
 			});
@@ -739,6 +1266,7 @@
 		dynamicContent.querySelectorAll('.check-text').forEach((input) => {
 			input.addEventListener('input', (e) => {
 				const index = Number(e.target.dataset.index);
+				markDirty();
 				event.material[index].text = e.target.value;
 			});
 		});
@@ -748,6 +1276,7 @@
 				const index = Number(e.target.dataset.index);
 				const userId = e.target.value;
 				const ownerUser = userId ? getAvailableUser(userId) : null;
+				markDirty();
 				event.material[index].ownerUserId = userId;
 				event.material[index].ownerName = ownerUser?.label || '';
 				renderMaterial();
@@ -757,6 +1286,7 @@
 		dynamicContent.querySelectorAll('.check-owner').forEach((input) => {
 			input.addEventListener('input', (e) => {
 				const index = Number(e.target.dataset.index);
+				markDirty();
 				event.material[index].ownerName = e.target.value;
 			});
 		});
@@ -764,6 +1294,7 @@
 		dynamicContent.querySelectorAll('.check-notes').forEach((input) => {
 			input.addEventListener('input', (e) => {
 				const index = Number(e.target.dataset.index);
+				markDirty();
 				event.material[index].notes = e.target.value;
 			});
 		});
@@ -771,6 +1302,7 @@
 		dynamicContent.querySelectorAll('.remove-item').forEach((btn) => {
 			btn.addEventListener('click', (e) => {
 				const index = Number(e.currentTarget.dataset.index);
+				markDirty();
 				event.material.splice(index, 1);
 				renderMaterial();
 			});
@@ -779,6 +1311,7 @@
 		const addBtn = document.getElementById('addChecklistBtn');
 		if (addBtn) {
 			addBtn.addEventListener('click', () => {
+				markDirty();
 				event.material.push({ text: '', done: false, ownerUserId: '', ownerName: '', notes: '' });
 				renderMaterial();
 			});
@@ -887,6 +1420,7 @@
 			input.addEventListener('input', (e) => {
 				const index = Number(e.target.dataset.index);
 				const type = e.target.dataset.type;
+				markDirty();
 				event.marketing[index][type] = e.target.value;
 			});
 		});
@@ -894,6 +1428,7 @@
 		dynamicContent.querySelectorAll('.remove-marketing').forEach((btn) => {
 			btn.addEventListener('click', (e) => {
 				const index = Number(e.currentTarget.dataset.index);
+				markDirty();
 				event.marketing.splice(index, 1);
 				renderMarketing();
 			});
@@ -902,6 +1437,7 @@
 		const addBtn = document.getElementById('addMarketingBtn');
 		if (addBtn) {
 			addBtn.addEventListener('click', () => {
+				markDirty();
 				event.marketing.push({ city: '', mailSent: '', facebookPages: '', comment: '' });
 				renderMarketing();
 			});
@@ -936,6 +1472,137 @@
 		`;
 	}
 
+	async function uploadDocument(event, file) {
+		if (!event.uploadDocumentUrl || event.isDemo === true) {
+			throw new Error('document-upload-disabled');
+		}
+
+		const formData = new FormData();
+		formData.append('document_file', file);
+
+		const response = await fetch(event.uploadDocumentUrl, {
+			method: 'POST',
+			headers: {
+				requesttoken,
+			},
+			body: formData,
+			credentials: 'same-origin',
+		});
+
+		if (!response.ok) {
+			throw new Error('document-upload-failed');
+		}
+
+		const payload = await response.json();
+		if (!payload?.ok || !payload.document) {
+			throw new Error('document-upload-invalid');
+		}
+
+		return payload.document;
+	}
+
+	async function deleteDocument(event, document) {
+		if (!document?.deleteUrl || event.isDemo === true) {
+			throw new Error('document-delete-disabled');
+		}
+
+		const body = new URLSearchParams({ requesttoken });
+		const response = await fetch(document.deleteUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+			},
+			body: body.toString(),
+			credentials: 'same-origin',
+		});
+
+		if (!response.ok) {
+			throw new Error('document-delete-failed');
+		}
+	}
+
+	function renderDocuments() {
+		const event = getActiveEvent();
+		if (!event || !dynamicContent) {
+			return;
+		}
+
+		const documents = Array.isArray(event.documents) ? event.documents : [];
+		const isDemoEvent = event.isDemo === true;
+		const emptyCopy = isDemoEvent
+			? 'Det här demoeventet har inga riktiga filer kopplade.'
+			: 'Ladda upp dokument kopplade till eventet, till exempel körschema, avtal, PDF:er och bildmaterial.';
+
+		dynamicContent.innerHTML = `
+			<div class="panel-head">
+				<div>
+					<h3 class="panel-title">Dokument</h3>
+					<p class="panel-copy">${emptyCopy}</p>
+				</div>
+				<div class="actions">
+					<label class="btn btn-primary${isDemoEvent ? ' is-disabled' : ''}" ${isDemoEvent ? 'aria-disabled="true"' : ''}>
+						<input type="file" id="documentUploadInput" ${isDemoEvent ? 'disabled' : ''} hidden>
+						Ladda upp fil
+					</label>
+				</div>
+			</div>
+
+			<div class="section-block">
+				<h4>Filer för eventet</h4>
+				<p>Alla som har tillgång till vyn kan öppna och ta bort filer här.</p>
+				<div class="documents-list">
+					${documents.length > 0 ? documents.map((document, index) => `
+						<div class="document-row">
+							<div class="document-main">
+								<div class="document-name">${escapeHtml(document.name || 'Fil')}</div>
+								<div class="document-meta">${escapeHtml(formatFileSize(document.size))} • ${escapeHtml(formatDocumentDate(document.uploadedAt))}</div>
+							</div>
+							<div class="document-actions">
+								${document.downloadUrl ? `<a class="btn btn-secondary" href="${escapeHtml(document.downloadUrl)}" target="_blank" rel="noreferrer">Öppna</a>` : ''}
+								<button class="btn btn-accent remove-document" type="button" data-index="${index}" ${isDemoEvent ? 'disabled' : ''}>Ta bort</button>
+							</div>
+						</div>
+					`).join('') : `<div class="empty-note">Inga dokument uppladdade ännu.</div>`}
+				</div>
+			</div>
+		`;
+
+		const uploadInput = document.getElementById('documentUploadInput');
+		uploadInput?.addEventListener('change', async (e) => {
+			const file = e.target.files?.[0];
+			if (!file) {
+				return;
+			}
+
+			try {
+				const document = await uploadDocument(event, file);
+				event.documents = [...documents, document];
+				renderDocuments();
+			} catch (error) {
+				window.alert('Kunde inte ladda upp filen. Försök igen.');
+				e.target.value = '';
+			}
+		});
+
+		dynamicContent.querySelectorAll('.remove-document').forEach((button) => {
+			button.addEventListener('click', async (e) => {
+				const index = Number(e.currentTarget.dataset.index);
+				const document = documents[index];
+				if (!document) {
+					return;
+				}
+
+				try {
+					await deleteDocument(event, document);
+					event.documents = documents.filter((_, currentIndex) => currentIndex !== index);
+					renderDocuments();
+				} catch (error) {
+					window.alert('Kunde inte ta bort filen. Försök igen.');
+				}
+			});
+		});
+	}
+
 	function renderActiveTab() {
 		tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === state.activeTab));
 
@@ -962,6 +1629,9 @@
 			if (state.activeTab === 'marketing') {
 				renderMarketingSummary();
 			}
+			if (state.activeTab === 'documents') {
+				renderDocuments();
+			}
 			return;
 		}
 
@@ -976,6 +1646,9 @@
 		}
 		if (state.activeTab === 'marketing') {
 			renderMarketing();
+		}
+		if (state.activeTab === 'documents') {
+			renderDocuments();
 		}
 	}
 
@@ -1043,14 +1716,28 @@
 	}
 
 	tabs.forEach((tab) => {
-		tab.addEventListener('click', () => {
+		tab.addEventListener('click', async () => {
+			if (tab.dataset.tab === state.activeTab) {
+				return;
+			}
+			const dirtyResult = await blockIfDirty();
+			if (dirtyResult !== 'continue') {
+				return;
+			}
 			state.activeTab = tab.dataset.tab || 'overview';
 			renderActiveTab();
 		});
 	});
 
 	eventButtons.forEach((button) => {
-		button.addEventListener('click', () => {
+		button.addEventListener('click', async () => {
+			if (button.dataset.eventId === String(state.activeEventId)) {
+				return;
+			}
+			const dirtyResult = await blockIfDirty();
+			if (dirtyResult !== 'continue') {
+				return;
+			}
 			state.activeEventId = Number(button.dataset.eventId);
 			render();
 		});
@@ -1062,6 +1749,10 @@
 	});
 
 	async function persistChat(event) {
+		if (event.isDemo === true || !event.saveChatUrl) {
+			throw new Error('chat-save-disabled');
+		}
+
 		const body = new URLSearchParams({
 			chat_json: JSON.stringify(event.chat),
 		});
@@ -1087,6 +1778,10 @@
 		if (!event || !text) {
 			return;
 		}
+		if (event.isDemo === true) {
+			window.alert('Chatten är låst i demoeventet.');
+			return;
+		}
 
 		const message = {
 			type: 'message',
@@ -1110,12 +1805,89 @@
 		}
 	}
 
+	function openPrintSummary() {
+		const event = getActiveEvent();
+		if (!event) {
+			return;
+		}
+
+		if (!printFrame) {
+			printFrame = document.createElement('iframe');
+			printFrame.setAttribute('aria-hidden', 'true');
+			printFrame.tabIndex = -1;
+			printFrame.style.position = 'fixed';
+			printFrame.style.right = '0';
+			printFrame.style.bottom = '0';
+			printFrame.style.width = '0';
+			printFrame.style.height = '0';
+			printFrame.style.border = '0';
+			printFrame.style.opacity = '0';
+			printFrame.style.pointerEvents = 'none';
+			document.body.appendChild(printFrame);
+		}
+
+		const printDocument = printFrame.contentWindow?.document;
+		const printWindow = printFrame.contentWindow;
+		if (!printDocument || !printWindow) {
+			window.alert('Kunde inte skapa utskriftsvyn. Försök igen.');
+			return;
+		}
+
+		printDocument.open();
+		printDocument.write(buildPrintableSummary(event));
+		printDocument.close();
+
+		window.setTimeout(() => {
+			printWindow.focus();
+			printWindow.print();
+		}, 150);
+	}
+
 	sendBtn?.addEventListener('click', sendMessage);
+	printSummaryBtn?.addEventListener('click', openPrintSummary);
+	discardChangesBtn?.addEventListener('click', discardCurrentChanges);
+	unsavedStayBtn?.addEventListener('click', () => closeUnsavedModal('stay'));
+	unsavedDiscardBtn?.addEventListener('click', () => {
+		discardCurrentChanges();
+		closeUnsavedModal('continue');
+	});
+	unsavedSaveBtn?.addEventListener('click', async () => {
+		if (!unsavedSaveBtn) {
+			return;
+		}
+
+		unsavedSaveBtn.disabled = true;
+		unsavedSaveBtn.textContent = 'Sparar...';
+		try {
+			const saved = await saveCurrentChanges();
+			if (saved) {
+				closeUnsavedModal('continue');
+				return;
+			}
+			unsavedSaveBtn.disabled = false;
+			unsavedSaveBtn.textContent = 'Spara ändringar';
+		} catch (error) {
+			if (unsavedModalMessage) {
+				unsavedModalMessage.textContent = 'Kunde inte spara ändringarna. Försök igen eller välj "Spara inte ändringar".';
+			}
+			unsavedSaveBtn.disabled = false;
+			unsavedSaveBtn.textContent = 'Spara ändringar';
+		}
+	});
 	chatInput?.addEventListener('keydown', (e) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
 			sendMessage();
 		}
+	});
+
+	window.addEventListener('beforeunload', (event) => {
+		if (!state.dirty || state.submitting) {
+			return;
+		}
+
+		event.preventDefault();
+		event.returnValue = '';
 	});
 
 	render();

@@ -61,6 +61,7 @@ class EventService {
 				'sort_order' => (int)($event['sort_order'] ?? 0),
 				'source' => (string)($event['source'] ?? $this->detectSource($event)),
 				'staff' => $this->normalizeStaff((array)($event['staff'] ?? [])),
+				'documents' => $this->normalizeDocuments((array)($event['documents'] ?? [])),
 				'chat' => $this->normalizeChat((array)($event['chat'] ?? []), (string)($event['title'] ?? '')),
 			];
 		}, $events));
@@ -77,6 +78,7 @@ class EventService {
 			'sort_order' => $sortOrder,
 			'source' => 'manual',
 			'staff' => [],
+			'documents' => [],
 			'chat' => $this->getDefaultChat(trim($title)),
 		];
 
@@ -124,6 +126,7 @@ class EventService {
 		unset($events[$id]);
 
 		$this->writeRawEvents(array_values($events));
+		$this->deleteDocumentsDirectory($id);
 	}
 
 	/**
@@ -153,6 +156,124 @@ class EventService {
 		$title = $this->cleanText((string)($events[$id]['title'] ?? 'Event'));
 		$events[$id]['chat'] = $this->normalizeChat($chat, $title, false);
 		$this->writeRawEvents($events);
+	}
+
+	/**
+	 * @param array<string, mixed> $uploadedFile
+	 * @return array<string, mixed>|null
+	 */
+	public function addDocument(int $id, array $uploadedFile): ?array {
+		$events = $this->readRawEvents();
+
+		if (!isset($events[$id])) {
+			return null;
+		}
+
+		$tmpName = (string)($uploadedFile['tmp_name'] ?? '');
+		$originalName = trim(basename((string)($uploadedFile['name'] ?? '')));
+		$errorCode = (int)($uploadedFile['error'] ?? UPLOAD_ERR_NO_FILE);
+		$size = (int)($uploadedFile['size'] ?? 0);
+		$mimeType = trim((string)($uploadedFile['type'] ?? 'application/octet-stream'));
+
+		if ($errorCode !== UPLOAD_ERR_OK || $tmpName === '' || $originalName === '') {
+			return null;
+		}
+
+		$extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+		$extension = preg_replace('/[^a-z0-9]+/i', '', $extension) ?? '';
+		$documentId = bin2hex(random_bytes(12));
+		$storedName = $documentId . ($extension !== '' ? '.' . $extension : '');
+		$directory = $this->getDocumentsDirectoryPath($id);
+		if (!is_dir($directory)) {
+			mkdir($directory, 0775, true);
+		}
+
+		$targetPath = $directory . '/' . $storedName;
+		$moved = move_uploaded_file($tmpName, $targetPath);
+		if (!$moved) {
+			$moved = @rename($tmpName, $targetPath);
+		}
+		if (!$moved && is_file($tmpName)) {
+			$moved = @copy($tmpName, $targetPath);
+		}
+		if (!$moved) {
+			return null;
+		}
+
+		$document = [
+			'id' => $documentId,
+			'name' => $this->cleanText($originalName),
+			'storedName' => $storedName,
+			'mimeType' => $mimeType !== '' ? $mimeType : 'application/octet-stream',
+			'size' => is_file($targetPath) ? (int)(filesize($targetPath) ?: $size) : $size,
+			'uploadedAt' => gmdate('c'),
+		];
+
+		$existingDocuments = is_array($events[$id]['documents'] ?? null) ? $events[$id]['documents'] : [];
+		$existingDocuments[] = $document;
+		$events[$id]['documents'] = $this->normalizeDocuments($existingDocuments);
+		$this->writeRawEvents($events);
+
+		return $document;
+	}
+
+	public function deleteDocument(int $id, string $documentId): void {
+		$events = $this->readRawEvents();
+
+		if (!isset($events[$id])) {
+			return;
+		}
+
+		$remaining = [];
+		foreach ($this->normalizeDocuments((array)($events[$id]['documents'] ?? [])) as $document) {
+			if ((string)$document['id'] === $documentId) {
+				$path = $this->getDocumentPath($id, (string)$document['storedName']);
+				if (is_file($path)) {
+					@unlink($path);
+				}
+				continue;
+			}
+
+			$remaining[] = $document;
+		}
+
+		$events[$id]['documents'] = $remaining;
+		$this->writeRawEvents($events);
+	}
+
+	/**
+	 * @return array<string, string>|null
+	 */
+	public function getDocumentPayload(int $id, string $documentId): ?array {
+		$events = $this->readRawEvents();
+
+		if (!isset($events[$id])) {
+			return null;
+		}
+
+		foreach ($this->normalizeDocuments((array)($events[$id]['documents'] ?? [])) as $document) {
+			if ((string)$document['id'] !== $documentId) {
+				continue;
+			}
+
+			$path = $this->getDocumentPath($id, (string)$document['storedName']);
+			if (!is_file($path)) {
+				return null;
+			}
+
+			$content = file_get_contents($path);
+			if ($content === false) {
+				return null;
+			}
+
+			return [
+				'name' => (string)$document['name'],
+				'mimeType' => (string)$document['mimeType'],
+				'content' => $content,
+			];
+		}
+
+		return null;
 	}
 
 	/**
@@ -247,11 +368,29 @@ class EventService {
 			'description' => $description,
 			'link' => $link,
 			'staff' => $this->normalizeStaff((array)($event['staff'] ?? []), $title, $location),
+			'documents' => $this->normalizeDocuments((array)($event['documents'] ?? [])),
 			'chat' => $this->normalizeChat((array)($event['chat'] ?? []), $title),
 			'is_api' => $this->isApiEvent($event),
 			'is_past' => $this->isPastEvent($month, $day),
 			'sort_order' => (int)($event['sort_order'] ?? (($index + 1) * 10)),
 		];
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $documents
+	 * @return list<array{id: string, name: string, storedName: string, mimeType: string, size: int, uploadedAt: string}>
+	 */
+	private function normalizeDocuments(array $documents): array {
+		return array_values(array_filter(array_map(function (array $document): array {
+			return [
+				'id' => trim((string)($document['id'] ?? '')),
+				'name' => $this->cleanText((string)($document['name'] ?? '')),
+				'storedName' => trim((string)($document['storedName'] ?? '')),
+				'mimeType' => trim((string)($document['mimeType'] ?? 'application/octet-stream')),
+				'size' => (int)($document['size'] ?? 0),
+				'uploadedAt' => trim((string)($document['uploadedAt'] ?? '')),
+			];
+		}, array_filter($documents, static fn ($document): bool => is_array($document))), static fn (array $document): bool => $document['id'] !== '' && $document['name'] !== '' && $document['storedName'] !== ''));
 	}
 
 	/**
@@ -277,11 +416,30 @@ class EventService {
 				|| $person['area'] !== '';
 		}));
 
-		if ($normalized !== []) {
-			return $normalized;
+		$eventOwner = null;
+		$others = [];
+		foreach ($normalized as $person) {
+			if ($eventOwner === null && mb_strtolower($person['role']) === 'eventansvarig') {
+				$person['role'] = 'Eventansvarig';
+				$eventOwner = $person;
+				continue;
+			}
+
+			$others[] = $person;
 		}
 
-		return [];
+		if ($eventOwner === null) {
+			$eventOwner = [
+				'userId' => '',
+				'firstName' => '',
+				'lastName' => '',
+				'email' => '',
+				'role' => 'Eventansvarig',
+				'area' => '',
+			];
+		}
+
+		return array_values([$eventOwner, ...$others]);
 	}
 
 	/**
@@ -402,6 +560,33 @@ class EventService {
 
 	private function getEventsFilePath(): string {
 		return \OC::$SERVERROOT . '/custom_apps/' . Application::APP_ID . '/data/events.json';
+	}
+
+	private function getDocumentsRootPath(): string {
+		return \OC::$SERVERROOT . '/custom_apps/' . Application::APP_ID . '/data/documents';
+	}
+
+	private function getDocumentsDirectoryPath(int $id): string {
+		return $this->getDocumentsRootPath() . '/event-' . $id;
+	}
+
+	private function getDocumentPath(int $id, string $storedName): string {
+		return $this->getDocumentsDirectoryPath($id) . '/' . $storedName;
+	}
+
+	private function deleteDocumentsDirectory(int $id): void {
+		$directory = $this->getDocumentsDirectoryPath($id);
+		if (!is_dir($directory)) {
+			return;
+		}
+
+		foreach (glob($directory . '/*') ?: [] as $path) {
+			if (is_file($path)) {
+				@unlink($path);
+			}
+		}
+
+		@rmdir($directory);
 	}
 
 	/**

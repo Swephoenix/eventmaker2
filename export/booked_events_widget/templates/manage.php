@@ -34,10 +34,12 @@ $clientEvents = array_map(static function (array $event): array {
 		'description' => (string)$event['description'],
 		'link' => (string)$event['link'],
 		'isApi' => (bool)($event['is_api'] ?? false),
+		'isDemo' => false,
 		'sortOrder' => (int)$event['sort_order'],
 		'updateUrl' => (string)$event['updateUrl'],
 		'saveStaffUrl' => (string)$event['saveStaffUrl'],
 		'saveChatUrl' => (string)$event['saveChatUrl'],
+		'uploadDocumentUrl' => (string)($event['uploadDocumentUrl'] ?? ''),
 		'deleteUrl' => (string)$event['deleteUrl'],
 		'staff' => array_values(array_map(static function (array $person): array {
 			return [
@@ -51,6 +53,17 @@ $clientEvents = array_map(static function (array $event): array {
 		}, (array)($event['staff'] ?? []))),
 		'material' => [],
 		'marketing' => [],
+		'documents' => array_values(array_map(static function (array $document): array {
+			return [
+				'id' => (string)($document['id'] ?? ''),
+				'name' => (string)($document['name'] ?? ''),
+				'mimeType' => (string)($document['mimeType'] ?? ''),
+				'size' => (int)($document['size'] ?? 0),
+				'uploadedAt' => (string)($document['uploadedAt'] ?? ''),
+				'downloadUrl' => (string)($document['downloadUrl'] ?? ''),
+				'deleteUrl' => (string)($document['deleteUrl'] ?? ''),
+			];
+		}, (array)($event['documents'] ?? []))),
 		'chat' => array_values(array_map(static function (array $message): array {
 			return [
 				'type' => (string)($message['type'] ?? 'message'),
@@ -58,10 +71,52 @@ $clientEvents = array_map(static function (array $event): array {
 				'senderLabel' => (string)($message['senderLabel'] ?? ''),
 				'senderUserId' => (string)($message['senderUserId'] ?? ''),
 				'createdAt' => (string)($message['createdAt'] ?? ''),
-			];
-		}, (array)($event['chat'] ?? []))),
+		];
+	}, (array)($event['chat'] ?? []))),
 	];
 }, $_['events']);
+
+if ((string)$_['viewMode'] === 'admin') {
+	$clientEvents[] = [
+		'id' => 999001,
+		'title' => 'Testmässan',
+		'date' => 'november 14-16',
+		'location' => 'Stockholmsmässan • Monter B14',
+		'description' => 'Demoevent för en större mässa där ett parti ska ställa ut. Här finns exempel på extern personal, materialbehov och marknadsföringsplanering för att kunna testa hela planeringsflödet.',
+		'link' => 'https://example.com/testmassan',
+		'isApi' => false,
+		'isDemo' => true,
+		'sortOrder' => 999999,
+		'updateUrl' => '',
+		'saveStaffUrl' => '',
+		'saveChatUrl' => '',
+		'uploadDocumentUrl' => '',
+		'deleteUrl' => '',
+		'staff' => [
+			['userId' => '', 'firstName' => 'Monica', 'lastName' => 'Lind', 'email' => 'monica.lind@example.org', 'role' => 'Eventansvarig', 'area' => 'Monteransvar och schema'],
+			['userId' => '', 'firstName' => 'Johan', 'lastName' => 'Berg', 'email' => 'johan.berg@example.org', 'role' => 'Talare', 'area' => 'Scenpresentation och publikkontakt'],
+			['userId' => '', 'firstName' => 'Sara', 'lastName' => 'Holm', 'email' => 'sara.holm@example.org', 'role' => 'Volontär', 'area' => 'Utdelning av material'],
+			['userId' => '', 'firstName' => 'Emil', 'lastName' => 'Sund', 'email' => 'emil.sund@example.org', 'role' => 'Logistik', 'area' => 'Transport och uppsättning'],
+		],
+		'material' => [
+			['text' => 'Rollup och backdrop till montern', 'done' => true, 'ownerUserId' => '', 'ownerName' => 'Emil Sund', 'notes' => 'Lastas in kvällen före mässstart.'],
+			['text' => 'Flyers och foldrar om partiets frågor', 'done' => false, 'ownerUserId' => '', 'ownerName' => 'Sara Holm', 'notes' => 'Tryckfiler klara men leverans väntas tisdag.'],
+			['text' => 'Namnskyltar och profiltröjor', 'done' => false, 'ownerUserId' => '', 'ownerName' => 'Monica Lind', 'notes' => 'Kontrollera storlekar för alla i teamet.'],
+			['text' => 'Skärm med presentationsloop', 'done' => true, 'ownerUserId' => '', 'ownerName' => 'Johan Berg', 'notes' => 'HDMI-adapter ligger i tekniklådan.'],
+		],
+		'marketing' => [
+			['city' => 'Stockholm', 'mailSent' => 'Ja', 'facebookPages' => 'Lokala stadsdelsgrupper och mässans officiella sida', 'comment' => 'Prioriterad ort eftersom mässan hålls här.'],
+			['city' => 'Uppsala', 'mailSent' => 'Ja', 'facebookPages' => 'Uppsalagrupper och närliggande studentforum', 'comment' => 'Bra pendlingsavstånd till eventet.'],
+			['city' => 'Västerås', 'mailSent' => 'Nej', 'facebookPages' => 'Regionala evenemangssidor', 'comment' => 'Skickas när bemanning är helt bekräftad.'],
+		],
+		'documents' => [],
+		'chat' => [
+			['type' => 'system', 'text' => 'Det här är ett demoevent för att testa planeringsvyn.', 'senderLabel' => 'System', 'senderUserId' => '', 'createdAt' => ''],
+			['type' => 'message', 'text' => 'Vi behöver dubbelkolla att montern får både el och två ståbord.', 'senderLabel' => 'Monica Lind', 'senderUserId' => '', 'createdAt' => '2026-03-18T08:15:00Z'],
+			['type' => 'message', 'text' => 'Jag tar med skärmen och presentationsloopen på USB också.', 'senderLabel' => 'Johan Berg', 'senderUserId' => '', 'createdAt' => '2026-03-18T09:02:00Z'],
+		],
+	];
+}
 ?>
 
 <div
@@ -88,7 +143,7 @@ $clientEvents = array_map(static function (array $event): array {
 			</div>
 
 			<div class="event-list" id="eventList">
-				<?php foreach ($_['events'] as $index => $event): ?>
+				<?php foreach ($clientEvents as $index => $event): ?>
 					<?php [$dateTop, $dateBottom] = $buildDateParts((string)$event['date']); ?>
 					<button class="event-card<?php p($index === 0 ? ' active' : ''); ?>" type="button" data-event-id="<?php p((string)$event['id']); ?>">
 						<div class="event-date">
@@ -115,6 +170,10 @@ $clientEvents = array_map(static function (array $event): array {
 							<span class="badge" id="mainLocationBadge">Plats</span>
 						</div>
 					</div>
+					<div class="main-head-actions">
+						<button class="btn btn-secondary" type="button" id="discardChangesBtn" hidden>Spara inte ändringar</button>
+						<button class="btn btn-secondary" type="button" id="printSummaryBtn">Printa sammanfattning</button>
+					</div>
 				</div>
 			</div>
 
@@ -124,6 +183,7 @@ $clientEvents = array_map(static function (array $event): array {
 					<button class="tab-btn" type="button" data-tab="staff">Personal</button>
 					<button class="tab-btn" type="button" data-tab="material">Material</button>
 					<button class="tab-btn" type="button" data-tab="marketing">Marknadsföring</button>
+					<button class="tab-btn" type="button" data-tab="documents">Dokument</button>
 				</div>
 
 				<div class="content-grid">
@@ -148,4 +208,17 @@ $clientEvents = array_map(static function (array $event): array {
 			</div>
 		</main>
 	</section>
+
+	<div class="unsaved-modal" id="unsavedModal" hidden>
+		<div class="unsaved-modal__backdrop"></div>
+		<div class="unsaved-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="unsavedModalTitle">
+			<h3 id="unsavedModalTitle">Osparade ändringar</h3>
+			<p id="unsavedModalMessage">Du har osparade ändringar i den här vyn.</p>
+			<div class="unsaved-modal__actions">
+				<button class="btn btn-primary" type="button" id="unsavedSaveBtn">Spara ändringar</button>
+				<button class="btn btn-secondary" type="button" id="unsavedDiscardBtn">Spara inte ändringar</button>
+				<button class="btn btn-secondary" type="button" id="unsavedStayBtn">Stanna kvar</button>
+			</div>
+		</div>
+	</div>
 </div>
