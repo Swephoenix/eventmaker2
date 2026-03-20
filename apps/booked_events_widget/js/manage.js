@@ -49,6 +49,38 @@
 		return state.availableUsers.find((user) => user.id === userId) || null;
 	}
 
+	function getMessageTone(message) {
+		if (message.type === 'system') {
+			return 'system';
+		}
+
+		if (state.currentUser?.id && message.senderUserId === state.currentUser.id) {
+			return 'me';
+		}
+
+		return 'other';
+	}
+
+	function formatMessageMeta(message) {
+		const parts = [];
+		if (message.senderLabel) {
+			parts.push(message.senderLabel);
+		}
+		if (message.createdAt) {
+			const parsedDate = new Date(message.createdAt);
+			if (!Number.isNaN(parsedDate.getTime())) {
+				parts.push(parsedDate.toLocaleString('sv-SE', {
+					month: 'short',
+					day: 'numeric',
+					hour: '2-digit',
+					minute: '2-digit',
+				}));
+			}
+		}
+
+		return parts.join(' • ');
+	}
+
 	function isBookedForCurrentUser(event) {
 		if (!state.currentUser?.id) {
 			return false;
@@ -201,7 +233,16 @@
 		}
 
 		chatBox.innerHTML = event.chat
-			.map((msg) => `<div class="msg ${escapeHtml(msg.type)}">${escapeHtml(msg.text)}</div>`)
+			.map((msg) => {
+				const tone = getMessageTone(msg);
+				const meta = formatMessageMeta(msg);
+				return `
+					<div class="msg ${escapeHtml(tone)}">
+						${meta ? `<div class="msg-meta">${escapeHtml(meta)}</div>` : ''}
+						<div class="msg-text">${escapeHtml(msg.text)}</div>
+					</div>
+				`;
+			})
 			.join('');
 		chatBox.scrollTop = chatBox.scrollHeight;
 	}
@@ -870,17 +911,53 @@
 		render();
 	});
 
-	function sendMessage() {
+	async function persistChat(event) {
+		const body = new URLSearchParams({
+			chat_json: JSON.stringify(event.chat),
+		});
+
+		const response = await fetch(event.saveChatUrl, {
+			method: 'POST',
+			headers: {
+				requesttoken,
+				'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+			},
+			body: body.toString(),
+			credentials: 'same-origin',
+		});
+
+		if (!response.ok) {
+			throw new Error('chat-save-failed');
+		}
+	}
+
+	async function sendMessage() {
 		const event = getActiveEvent();
 		const text = chatInput?.value.trim();
 		if (!event || !text) {
 			return;
 		}
 
-		event.chat.push({ type: 'me', text });
+		const message = {
+			type: 'message',
+			text,
+			senderLabel: state.currentUser?.label || 'Användare',
+			senderUserId: state.currentUser?.id || '',
+			createdAt: new Date().toISOString(),
+		};
+		const previousChat = Array.isArray(event.chat) ? [...event.chat] : [];
+		event.chat = [...previousChat, message];
 		renderChat();
 		chatInput.value = '';
 		chatInput.focus();
+
+		try {
+			await persistChat(event);
+		} catch (error) {
+			event.chat = previousChat;
+			renderChat();
+			window.alert('Kunde inte spara chatmeddelandet. Försök igen.');
+		}
 	}
 
 	sendBtn?.addEventListener('click', sendMessage);

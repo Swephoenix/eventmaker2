@@ -49,6 +49,10 @@ class PageController extends Controller {
 				'booked_events_widget.page.saveStaff',
 				['id' => (int)$event['id']],
 			);
+			$event['saveChatUrl'] = $this->urlGenerator->linkToRoute(
+				'booked_events_widget.page.saveChat',
+				['id' => (int)$event['id']],
+			);
 			$event['deleteUrl'] = $this->urlGenerator->linkToRoute(
 				'booked_events_widget.page.delete',
 				['id' => (int)$event['id']],
@@ -108,6 +112,22 @@ class PageController extends Controller {
 		$this->eventService->saveStaff(
 			$id,
 			array_values(array_filter($staff, static fn ($row): bool => is_array($row))),
+		);
+
+		return $this->redirectToIndex();
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function saveChat(int $id, string $chat_json = '[]'): RedirectResponse {
+		$chat = json_decode($chat_json, true);
+		if (!is_array($chat)) {
+			$chat = [];
+		}
+
+		$this->eventService->saveChat(
+			$id,
+			array_values(array_filter($chat, static fn ($row): bool => is_array($row))),
 		);
 
 		return $this->redirectToIndex();

@@ -37,6 +37,7 @@ $clientEvents = array_map(static function (array $event): array {
 		'sortOrder' => (int)$event['sort_order'],
 		'updateUrl' => (string)$event['updateUrl'],
 		'saveStaffUrl' => (string)$event['saveStaffUrl'],
+		'saveChatUrl' => (string)$event['saveChatUrl'],
 		'deleteUrl' => (string)$event['deleteUrl'],
 		'staff' => array_values(array_map(static function (array $person): array {
 			return [
@@ -57,11 +58,15 @@ $clientEvents = array_map(static function (array $event): array {
 			['city' => $location, 'mailSent' => 'Ja', 'facebookPages' => 'Lokala grupper och evenemangssidor', 'comment' => 'Prioritera orten närmast eventet'],
 			['city' => 'Närliggande ort', 'mailSent' => 'Nej', 'facebookPages' => 'Regionala sidor', 'comment' => 'Skicka om det finns plats kvar'],
 		],
-		'chat' => [
-			['type' => 'system', 'text' => 'Vi behöver säkerställa att rollup, flyers och kontaktlista är på plats före avfärd.'],
-			['type' => 'me', 'text' => 'Jag tar med rollup och bordsmaterial.'],
-			['type' => 'system', 'text' => 'Bra. Lägg gärna till vem som ansvarar för bemanningen i personalfliken.'],
-		],
+		'chat' => array_values(array_map(static function (array $message): array {
+			return [
+				'type' => (string)($message['type'] ?? 'message'),
+				'text' => (string)($message['text'] ?? ''),
+				'senderLabel' => (string)($message['senderLabel'] ?? ''),
+				'senderUserId' => (string)($message['senderUserId'] ?? ''),
+				'createdAt' => (string)($message['createdAt'] ?? ''),
+			];
+		}, (array)($event['chat'] ?? []))),
 	];
 }, $_['events']);
 ?>

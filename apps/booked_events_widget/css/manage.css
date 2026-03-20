@@ -879,6 +879,17 @@
 	box-shadow: var(--shadow-sm);
 }
 
+.bew-manage .msg-meta {
+	margin-bottom: 4px;
+	font-size: 10px;
+	font-weight: 700;
+	opacity: 0.72;
+}
+
+.bew-manage .msg-text {
+	white-space: pre-wrap;
+}
+
 .bew-manage .msg.system {
 	background: #eef5fb;
 	color: #355a7c;
@@ -890,6 +901,13 @@
 	background: #ffe4c7;
 	color: #87460a;
 	border-top-right-radius: 6px;
+}
+
+.bew-manage .msg.other {
+	background: #ffffff;
+	color: #2f4e69;
+	border-top-left-radius: 6px;
+	border: 1px solid rgba(33, 91, 138, 0.08);
 }
 
 .bew-manage .chat-compose {

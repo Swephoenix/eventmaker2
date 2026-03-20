@@ -61,6 +61,7 @@ class EventService {
 				'sort_order' => (int)($event['sort_order'] ?? 0),
 				'source' => (string)($event['source'] ?? $this->detectSource($event)),
 				'staff' => $this->normalizeStaff((array)($event['staff'] ?? [])),
+				'chat' => $this->normalizeChat((array)($event['chat'] ?? []), (string)($event['title'] ?? '')),
 			];
 		}, $events));
 	}
@@ -76,6 +77,7 @@ class EventService {
 			'sort_order' => $sortOrder,
 			'source' => 'manual',
 			'staff' => [],
+			'chat' => $this->getDefaultChat(trim($title)),
 		];
 
 		$this->writeRawEvents($events);
@@ -135,6 +137,21 @@ class EventService {
 		}
 
 		$events[$id]['staff'] = $this->normalizeStaff($staff);
+		$this->writeRawEvents($events);
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $chat
+	 */
+	public function saveChat(int $id, array $chat): void {
+		$events = $this->readRawEvents();
+
+		if (!isset($events[$id])) {
+			return;
+		}
+
+		$title = $this->cleanText((string)($events[$id]['title'] ?? 'Event'));
+		$events[$id]['chat'] = $this->normalizeChat($chat, $title, false);
 		$this->writeRawEvents($events);
 	}
 
@@ -230,6 +247,7 @@ class EventService {
 			'description' => $description,
 			'link' => $link,
 			'staff' => $this->normalizeStaff((array)($event['staff'] ?? []), $title, $location),
+			'chat' => $this->normalizeChat((array)($event['chat'] ?? []), $title),
 			'is_api' => $this->isApiEvent($event),
 			'is_past' => $this->isPastEvent($month, $day),
 			'sort_order' => (int)($event['sort_order'] ?? (($index + 1) * 10)),
@@ -268,6 +286,48 @@ class EventService {
 			['userId' => '', 'firstName' => 'Representant', 'lastName' => '', 'email' => '', 'role' => 'På plats', 'area' => $location],
 			['userId' => '', 'firstName' => 'Volontär', 'lastName' => '', 'email' => '', 'role' => 'Stöd', 'area' => 'Material, välkomnande och praktiskt stöd'],
 		];
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $chat
+	 * @return list<array{type: string, text: string, senderLabel: string, senderUserId: string, createdAt: string}>
+	 */
+	private function normalizeChat(array $chat, string $title = '', bool $withFallback = true): array {
+		$normalized = array_values(array_filter(array_map(function (array $message): array {
+			$type = trim((string)($message['type'] ?? 'message'));
+			if ($type !== 'system') {
+				$type = 'message';
+			}
+
+			return [
+				'type' => $type,
+				'text' => $this->cleanText((string)($message['text'] ?? '')),
+				'senderLabel' => $this->cleanText((string)($message['senderLabel'] ?? '')),
+				'senderUserId' => trim((string)($message['senderUserId'] ?? '')),
+				'createdAt' => trim((string)($message['createdAt'] ?? '')),
+			];
+		}, array_filter($chat, static fn ($message): bool => is_array($message))), static fn (array $message): bool => $message['text'] !== ''));
+
+		if ($normalized !== [] || !$withFallback) {
+			return $normalized;
+		}
+
+		return $this->getDefaultChat($title);
+	}
+
+	/**
+	 * @return list<array{type: string, text: string, senderLabel: string, senderUserId: string, createdAt: string}>
+	 */
+	private function getDefaultChat(string $title = ''): array {
+		$context = $title !== '' ? ' för ' . $title : '';
+
+		return [[
+			'type' => 'system',
+			'text' => 'Gemensam intern chatt' . $context . '. Här samlar eventplanerare och eventpersonal samma information.',
+			'senderLabel' => 'System',
+			'senderUserId' => '',
+			'createdAt' => '',
+		]];
 	}
 
 	/**

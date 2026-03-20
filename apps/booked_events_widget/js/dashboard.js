@@ -98,10 +98,10 @@
 
 				el.innerHTML = `
 					<div class="bew-widget">
-						<div class="bew-widget__header">
+						${markup}
+						<div class="bew-widget__footer">
 							${renderToolbar(view)}
 						</div>
-						${markup}
 						${renderDialog()}
 					</div>
 				`

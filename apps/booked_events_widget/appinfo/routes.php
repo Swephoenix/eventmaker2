@@ -8,6 +8,7 @@ return [
 		['name' => 'page#create', 'url' => '/events', 'verb' => 'POST'],
 		['name' => 'page#update', 'url' => '/events/{id}', 'verb' => 'POST'],
 		['name' => 'page#saveStaff', 'url' => '/events/{id}/staff', 'verb' => 'POST'],
+		['name' => 'page#saveChat', 'url' => '/events/{id}/chat', 'verb' => 'POST'],
 		['name' => 'page#delete', 'url' => '/events/{id}/delete', 'verb' => 'POST'],
 	],
 ];
