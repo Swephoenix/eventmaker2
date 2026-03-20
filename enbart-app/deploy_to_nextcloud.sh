@@ -9,7 +9,9 @@ APP_SOURCE_DIR="${APP_SOURCE_DIR:-$SCRIPT_DIR/$APP_ID}"
 TARGET_APPS_DIR="${TARGET_APPS_DIR:-/var/www/html/custom_apps}"
 OCC_USER="${OCC_USER:-www-data}"
 APP_TARGET_DIR="$TARGET_APPS_DIR/$APP_ID"
-TARGET_EVENTS_FILE="$APP_TARGET_DIR/data/events.json"
+TARGET_EVENTS_FILE="$APP_TARGET_DIR/data/api_events.json"
+TARGET_MANUAL_STATE_FILE="$APP_TARGET_DIR/data/manual_state.json"
+TARGET_LEGACY_EVENTS_FILE="$APP_TARGET_DIR/data/events.json"
 REFRESH_API_AFTER_DEPLOY="${REFRESH_API_AFTER_DEPLOY:-1}"
 
 if [[ ! -d "$APP_SOURCE_DIR" ]]; then
@@ -21,20 +23,44 @@ echo "Deployar $APP_ID till container $CONTAINER_NAME..."
 echo "Källa: $APP_SOURCE_DIR"
 echo "Mål: $APP_TARGET_DIR"
 
-TMP_EVENTS_FILE="/tmp/${APP_ID}_events.json"
+TMP_EVENTS_FILE="/tmp/${APP_ID}_api_events.json"
+TMP_MANUAL_STATE_FILE="/tmp/${APP_ID}_manual_state.json"
+TMP_LEGACY_EVENTS_FILE="/tmp/${APP_ID}_legacy_events.json"
 
 if docker exec "$CONTAINER_NAME" test -f "$TARGET_EVENTS_FILE"; then
-	echo "Bevarar befintlig events.json från containern..."
+	echo "Bevarar befintlig api_events.json från containern..."
 	docker exec "$CONTAINER_NAME" cp "$TARGET_EVENTS_FILE" "$TMP_EVENTS_FILE"
+fi
+
+if docker exec "$CONTAINER_NAME" test -f "$TARGET_MANUAL_STATE_FILE"; then
+	echo "Bevarar befintlig manual_state.json från containern..."
+	docker exec "$CONTAINER_NAME" cp "$TARGET_MANUAL_STATE_FILE" "$TMP_MANUAL_STATE_FILE"
+fi
+
+if docker exec "$CONTAINER_NAME" test -f "$TARGET_LEGACY_EVENTS_FILE"; then
+	echo "Bevarar äldre events.json från containern för migrering..."
+	docker exec "$CONTAINER_NAME" cp "$TARGET_LEGACY_EVENTS_FILE" "$TMP_LEGACY_EVENTS_FILE"
 fi
 
 docker exec "$CONTAINER_NAME" rm -rf "$APP_TARGET_DIR"
 docker cp "$APP_SOURCE_DIR" "$CONTAINER_NAME:$TARGET_APPS_DIR/"
 
 if docker exec "$CONTAINER_NAME" test -f "$TMP_EVENTS_FILE"; then
-	echo "Återställer tidigare events.json efter deploy..."
+	echo "Återställer tidigare api_events.json efter deploy..."
 	docker exec "$CONTAINER_NAME" mkdir -p "$APP_TARGET_DIR/data"
 	docker exec "$CONTAINER_NAME" mv "$TMP_EVENTS_FILE" "$TARGET_EVENTS_FILE"
+fi
+
+if docker exec "$CONTAINER_NAME" test -f "$TMP_MANUAL_STATE_FILE"; then
+	echo "Återställer tidigare manual_state.json efter deploy..."
+	docker exec "$CONTAINER_NAME" mkdir -p "$APP_TARGET_DIR/data"
+	docker exec "$CONTAINER_NAME" mv "$TMP_MANUAL_STATE_FILE" "$TARGET_MANUAL_STATE_FILE"
+fi
+
+if docker exec "$CONTAINER_NAME" test -f "$TMP_LEGACY_EVENTS_FILE"; then
+	echo "Återställer äldre events.json efter deploy..."
+	docker exec "$CONTAINER_NAME" mkdir -p "$APP_TARGET_DIR/data"
+	docker exec "$CONTAINER_NAME" mv "$TMP_LEGACY_EVENTS_FILE" "$TARGET_LEGACY_EVENTS_FILE"
 fi
 
 docker exec "$CONTAINER_NAME" chown -R "$OCC_USER:$OCC_USER" "$APP_TARGET_DIR"

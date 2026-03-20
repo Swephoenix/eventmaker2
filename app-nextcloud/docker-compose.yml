@@ -64,18 +64,34 @@ services:
         done
 
         echo "Syncing custom app into active Nextcloud volume..."
-        TMP_EVENTS_FILE="/tmp/booked_events_widget_events.json"
+        TMP_API_EVENTS_FILE="/tmp/booked_events_widget_api_events.json"
+        TMP_MANUAL_STATE_FILE="/tmp/booked_events_widget_manual_state.json"
+        TMP_LEGACY_EVENTS_FILE="/tmp/booked_events_widget_legacy_events.json"
+        if [ -f /var/www/html/custom_apps/booked_events_widget/data/api_events.json ]; then
+          cp /var/www/html/custom_apps/booked_events_widget/data/api_events.json "$$TMP_API_EVENTS_FILE"
+        fi
+        if [ -f /var/www/html/custom_apps/booked_events_widget/data/manual_state.json ]; then
+          cp /var/www/html/custom_apps/booked_events_widget/data/manual_state.json "$$TMP_MANUAL_STATE_FILE"
+        fi
         if [ -f /var/www/html/custom_apps/booked_events_widget/data/events.json ]; then
-          cp /var/www/html/custom_apps/booked_events_widget/data/events.json "$$TMP_EVENTS_FILE"
+          cp /var/www/html/custom_apps/booked_events_widget/data/events.json "$$TMP_LEGACY_EVENTS_FILE"
         fi
 
         mkdir -p /var/www/html/custom_apps
         chown www-data:www-data /var/www/html/custom_apps
         rm -rf /var/www/html/custom_apps/booked_events_widget
         cp -a /usr/src/nextcloud/custom_apps/booked_events_widget /var/www/html/custom_apps/booked_events_widget
-        if [ -f "$$TMP_EVENTS_FILE" ]; then
+        if [ -f "$$TMP_API_EVENTS_FILE" ]; then
           mkdir -p /var/www/html/custom_apps/booked_events_widget/data
-          mv "$$TMP_EVENTS_FILE" /var/www/html/custom_apps/booked_events_widget/data/events.json
+          mv "$$TMP_API_EVENTS_FILE" /var/www/html/custom_apps/booked_events_widget/data/api_events.json
+        fi
+        if [ -f "$$TMP_MANUAL_STATE_FILE" ]; then
+          mkdir -p /var/www/html/custom_apps/booked_events_widget/data
+          mv "$$TMP_MANUAL_STATE_FILE" /var/www/html/custom_apps/booked_events_widget/data/manual_state.json
+        fi
+        if [ -f "$$TMP_LEGACY_EVENTS_FILE" ]; then
+          mkdir -p /var/www/html/custom_apps/booked_events_widget/data
+          mv "$$TMP_LEGACY_EVENTS_FILE" /var/www/html/custom_apps/booked_events_widget/data/events.json
         fi
         chown -R www-data:www-data /var/www/html/custom_apps
 
@@ -125,7 +141,7 @@ services:
 
         while true; do
           echo "Updating event feed..."
-          /usr/local/bin/getevent.sh /var/www/html/custom_apps/booked_events_widget/data/events.json || true
+          /usr/local/bin/getevent.sh /var/www/html/custom_apps/booked_events_widget/data/api_events.json || true
           sleep 1800
         done
     volumes:

@@ -13,8 +13,8 @@ class EventService {
 	public function getEventsWithIds(): array {
 		$events = [];
 
-		foreach ($this->readRawEvents() as $index => $event) {
-			$events[] = $this->normalizeEvent($event, $index);
+		foreach ($this->readMergedRawEvents() as $event) {
+			$events[] = $this->normalizeEvent($event, (int)($event['event_id'] ?? 0));
 		}
 
 		usort($events, static function (array $left, array $right): int {
@@ -44,32 +44,66 @@ class EventService {
 	}
 
 	public function hasAnyEvents(): bool {
-		return $this->readRawEvents() !== [];
+		return $this->readMergedRawEvents() !== [];
 	}
 
 	/**
 	 * @param list<array<string, int|string>> $events
 	 */
 	public function seedEvents(array $events): void {
-		$this->writeRawEvents(array_map(function (array $event): array {
-			return [
-				'title' => (string)$event['title'],
-				'date' => (string)$event['date'],
-				'location' => (string)$event['location'],
+		$manualState = [
+			'manual_events' => [],
+			'api_overrides' => [],
+		];
+		$apiEvents = [];
+		$nextManualId = 1;
+
+		foreach ($events as $event) {
+			$normalizedEvent = [
+				'title' => (string)($event['title'] ?? ''),
+				'date' => (string)($event['date'] ?? ''),
+				'location' => (string)($event['location'] ?? ''),
 				'description' => (string)($event['description'] ?? ''),
 				'link' => (string)($event['link'] ?? ''),
 				'sort_order' => (int)($event['sort_order'] ?? 0),
 				'source' => (string)($event['source'] ?? $this->detectSource($event)),
+				'month' => (string)($event['month'] ?? ''),
+				'day' => (string)($event['day'] ?? ''),
+				'time' => (string)($event['time'] ?? ''),
+				'place' => (string)($event['place'] ?? ''),
 				'staff' => $this->normalizeStaff((array)($event['staff'] ?? [])),
 				'documents' => $this->normalizeDocuments((array)($event['documents'] ?? [])),
 				'chat' => $this->normalizeChat((array)($event['chat'] ?? []), (string)($event['title'] ?? '')),
 			];
-		}, $events));
+
+			if ($this->detectSource($normalizedEvent) === 'api') {
+				$apiEvent = $this->normalizeApiEventRecord($normalizedEvent);
+				$key = $this->buildApiEventKey($apiEvent);
+				$apiEvents[] = $apiEvent;
+
+				$manualState['api_overrides'][$key] = array_filter([
+					'description' => (string)$normalizedEvent['description'],
+					'sort_order' => (int)$normalizedEvent['sort_order'],
+					'staff' => $normalizedEvent['staff'],
+					'documents' => $normalizedEvent['documents'],
+					'chat' => $normalizedEvent['chat'],
+				], static fn ($value): bool => $value !== [] && $value !== '');
+				continue;
+			}
+
+			$manualEvent = $this->normalizeManualEventRecord($normalizedEvent, $nextManualId);
+			$manualState['manual_events'][] = $manualEvent;
+			$nextManualId = max($nextManualId, (int)$manualEvent['event_id'] + 1);
+		}
+
+		$this->writeApiEvents($apiEvents);
+		$this->writeManualState($manualState);
 	}
 
 	public function createEvent(string $title, string $date, string $location, string $description, string $link, int $sortOrder): void {
-		$events = $this->readRawEvents();
-		$events[] = [
+		$manualState = $this->readManualState();
+		$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+		$manualEvents[] = $this->normalizeManualEventRecord([
 			'title' => trim($title),
 			'date' => trim($date),
 			'location' => trim($location),
@@ -80,82 +114,140 @@ class EventService {
 			'staff' => [],
 			'documents' => [],
 			'chat' => $this->getDefaultChat(trim($title)),
-		];
-
-		$this->writeRawEvents($events);
+		], $this->getNextManualEventId($manualEvents));
+		$manualState['manual_events'] = $manualEvents;
+		$this->writeManualState($manualState);
 	}
 
 	public function updateEvent(int $id, string $title, string $date, string $location, string $description, string $link, int $sortOrder): void {
-		$events = $this->readRawEvents();
-
-		if (!isset($events[$id])) {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
 			return;
 		}
 
-		$existingEvent = $events[$id];
-		$isApiEvent = $this->isApiEvent($existingEvent);
+		if ($reference['source'] === 'manual') {
+			$manualState = $this->readManualState();
+			$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+			if (!isset($manualEvents[$reference['index']])) {
+				return;
+			}
 
-		$existingEvent['title'] = $isApiEvent
-			? $this->cleanText((string)($existingEvent['title'] ?? 'Event'))
-			: trim($title);
-		$existingEvent['date'] = $isApiEvent
-			? $this->cleanText((string)($existingEvent['date'] ?? ''))
-			: trim($date);
-		$existingEvent['location'] = $isApiEvent
-			? $this->cleanText((string)($existingEvent['location'] ?? ''))
-			: trim($location);
-		$existingEvent['description'] = trim($description);
-		$existingEvent['link'] = $isApiEvent
-			? trim((string)($existingEvent['link'] ?? ''))
-			: trim($link);
-		$existingEvent['sort_order'] = $sortOrder;
-		$existingEvent['source'] = $isApiEvent ? 'api' : 'manual';
+			$existingEvent = $manualEvents[$reference['index']];
+			$existingEvent['title'] = trim($title);
+			$existingEvent['date'] = trim($date);
+			$existingEvent['location'] = trim($location);
+			$existingEvent['description'] = trim($description);
+			$existingEvent['link'] = trim($link);
+			$existingEvent['sort_order'] = $sortOrder;
+			$existingEvent['source'] = 'manual';
+			$manualEvents[$reference['index']] = $existingEvent;
+			$manualState['manual_events'] = $manualEvents;
+			$this->writeManualState($manualState);
+			return;
+		}
 
-		$events[$id] = $existingEvent;
-
-		$this->writeRawEvents($events);
+		$manualState = $this->readManualState();
+		$key = (string)$reference['event_key'];
+		$override = (array)($manualState['api_overrides'][$key] ?? []);
+		$override['description'] = trim($description);
+		$override['sort_order'] = $sortOrder;
+		$override['deleted'] = false;
+		$manualState['api_overrides'][$key] = $override;
+		$this->writeManualState($manualState);
 	}
 
 	public function deleteEvent(int $id): void {
-		$events = $this->readRawEvents();
-
-		if (!isset($events[$id])) {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
 			return;
 		}
 
-		unset($events[$id]);
+		$storageId = (string)$reference['storage_id'];
+		if ($reference['source'] === 'manual') {
+			$manualState = $this->readManualState();
+			$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+			if (!isset($manualEvents[$reference['index']])) {
+				return;
+			}
 
-		$this->writeRawEvents(array_values($events));
-		$this->deleteDocumentsDirectory($id);
+			unset($manualEvents[$reference['index']]);
+			$manualState['manual_events'] = array_values($manualEvents);
+			$this->writeManualState($manualState);
+			$this->deleteDocumentsDirectory($storageId);
+			return;
+		}
+
+		$manualState = $this->readManualState();
+		$key = (string)$reference['event_key'];
+		$override = (array)($manualState['api_overrides'][$key] ?? []);
+		$override['deleted'] = true;
+		$manualState['api_overrides'][$key] = $override;
+		$this->writeManualState($manualState);
+		$this->deleteDocumentsDirectory($storageId);
 	}
 
 	/**
 	 * @param list<array<string, mixed>> $staff
 	 */
 	public function saveStaff(int $id, array $staff): void {
-		$events = $this->readRawEvents();
-
-		if (!isset($events[$id])) {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
 			return;
 		}
 
-		$events[$id]['staff'] = $this->normalizeStaff($staff);
-		$this->writeRawEvents($events);
+		if ($reference['source'] === 'manual') {
+			$manualState = $this->readManualState();
+			$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+			if (!isset($manualEvents[$reference['index']])) {
+				return;
+			}
+
+			$manualEvents[$reference['index']]['staff'] = $this->normalizeStaff($staff);
+			$manualState['manual_events'] = $manualEvents;
+			$this->writeManualState($manualState);
+			return;
+		}
+
+		$manualState = $this->readManualState();
+		$key = (string)$reference['event_key'];
+		$override = (array)($manualState['api_overrides'][$key] ?? []);
+		$override['staff'] = $this->normalizeStaff($staff);
+		$override['deleted'] = false;
+		$manualState['api_overrides'][$key] = $override;
+		$this->writeManualState($manualState);
 	}
 
 	/**
 	 * @param list<array<string, mixed>> $chat
 	 */
 	public function saveChat(int $id, array $chat): void {
-		$events = $this->readRawEvents();
-
-		if (!isset($events[$id])) {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
 			return;
 		}
 
-		$title = $this->cleanText((string)($events[$id]['title'] ?? 'Event'));
-		$events[$id]['chat'] = $this->normalizeChat($chat, $title, false);
-		$this->writeRawEvents($events);
+		$title = $this->cleanText((string)($reference['event']['title'] ?? 'Event'));
+
+		if ($reference['source'] === 'manual') {
+			$manualState = $this->readManualState();
+			$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+			if (!isset($manualEvents[$reference['index']])) {
+				return;
+			}
+
+			$manualEvents[$reference['index']]['chat'] = $this->normalizeChat($chat, $title, false);
+			$manualState['manual_events'] = $manualEvents;
+			$this->writeManualState($manualState);
+			return;
+		}
+
+		$manualState = $this->readManualState();
+		$key = (string)$reference['event_key'];
+		$override = (array)($manualState['api_overrides'][$key] ?? []);
+		$override['chat'] = $this->normalizeChat($chat, $title, false);
+		$override['deleted'] = false;
+		$manualState['api_overrides'][$key] = $override;
+		$this->writeManualState($manualState);
 	}
 
 	/**
@@ -163,9 +255,8 @@ class EventService {
 	 * @return array<string, mixed>|null
 	 */
 	public function addDocument(int $id, array $uploadedFile): ?array {
-		$events = $this->readRawEvents();
-
-		if (!isset($events[$id])) {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
 			return null;
 		}
 
@@ -183,7 +274,7 @@ class EventService {
 		$extension = preg_replace('/[^a-z0-9]+/i', '', $extension) ?? '';
 		$documentId = bin2hex(random_bytes(12));
 		$storedName = $documentId . ($extension !== '' ? '.' . $extension : '');
-		$directory = $this->getDocumentsDirectoryPath($id);
+		$directory = $this->getDocumentsDirectoryPath((string)$reference['storage_id']);
 		if (!is_dir($directory)) {
 			mkdir($directory, 0775, true);
 		}
@@ -209,25 +300,42 @@ class EventService {
 			'uploadedAt' => gmdate('c'),
 		];
 
-		$existingDocuments = is_array($events[$id]['documents'] ?? null) ? $events[$id]['documents'] : [];
+		$existingDocuments = is_array($reference['event']['documents'] ?? null) ? $reference['event']['documents'] : [];
 		$existingDocuments[] = $document;
-		$events[$id]['documents'] = $this->normalizeDocuments($existingDocuments);
-		$this->writeRawEvents($events);
+
+		if ($reference['source'] === 'manual') {
+			$manualState = $this->readManualState();
+			$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+			if (!isset($manualEvents[$reference['index']])) {
+				return null;
+			}
+
+			$manualEvents[$reference['index']]['documents'] = $this->normalizeDocuments($existingDocuments);
+			$manualState['manual_events'] = $manualEvents;
+			$this->writeManualState($manualState);
+		} else {
+			$manualState = $this->readManualState();
+			$key = (string)$reference['event_key'];
+			$override = (array)($manualState['api_overrides'][$key] ?? []);
+			$override['documents'] = $this->normalizeDocuments($existingDocuments);
+			$override['deleted'] = false;
+			$manualState['api_overrides'][$key] = $override;
+			$this->writeManualState($manualState);
+		}
 
 		return $document;
 	}
 
 	public function deleteDocument(int $id, string $documentId): void {
-		$events = $this->readRawEvents();
-
-		if (!isset($events[$id])) {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
 			return;
 		}
 
 		$remaining = [];
-		foreach ($this->normalizeDocuments((array)($events[$id]['documents'] ?? [])) as $document) {
+		foreach ($this->normalizeDocuments((array)($reference['event']['documents'] ?? [])) as $document) {
 			if ((string)$document['id'] === $documentId) {
-				$path = $this->getDocumentPath($id, (string)$document['storedName']);
+				$path = $this->getDocumentPath((string)$reference['storage_id'], (string)$document['storedName']);
 				if (is_file($path)) {
 					@unlink($path);
 				}
@@ -237,26 +345,43 @@ class EventService {
 			$remaining[] = $document;
 		}
 
-		$events[$id]['documents'] = $remaining;
-		$this->writeRawEvents($events);
+		if ($reference['source'] === 'manual') {
+			$manualState = $this->readManualState();
+			$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+			if (!isset($manualEvents[$reference['index']])) {
+				return;
+			}
+
+			$manualEvents[$reference['index']]['documents'] = $remaining;
+			$manualState['manual_events'] = $manualEvents;
+			$this->writeManualState($manualState);
+			return;
+		}
+
+		$manualState = $this->readManualState();
+		$key = (string)$reference['event_key'];
+		$override = (array)($manualState['api_overrides'][$key] ?? []);
+		$override['documents'] = $remaining;
+		$override['deleted'] = false;
+		$manualState['api_overrides'][$key] = $override;
+		$this->writeManualState($manualState);
 	}
 
 	/**
 	 * @return array<string, string>|null
 	 */
 	public function getDocumentPayload(int $id, string $documentId): ?array {
-		$events = $this->readRawEvents();
-
-		if (!isset($events[$id])) {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
 			return null;
 		}
 
-		foreach ($this->normalizeDocuments((array)($events[$id]['documents'] ?? [])) as $document) {
+		foreach ($this->normalizeDocuments((array)($reference['event']['documents'] ?? [])) as $document) {
 			if ((string)$document['id'] !== $documentId) {
 				continue;
 			}
 
-			$path = $this->getDocumentPath($id, (string)$document['storedName']);
+			$path = $this->getDocumentPath((string)$reference['storage_id'], (string)$document['storedName']);
 			if (!is_file($path)) {
 				return null;
 			}
@@ -279,42 +404,33 @@ class EventService {
 	/**
 	 * @return list<array<string, mixed>>
 	 */
-	private function readRawEvents(): array {
-		$filePath = $this->getEventsFilePath();
-		if (!is_file($filePath)) {
-			return $this->getDefaultEvents();
+	private function readMergedRawEvents(): array {
+		$manualState = $this->readManualState();
+		$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+		$apiEvents = $this->readApiEvents();
+		$apiOverrides = is_array($manualState['api_overrides']) ? $manualState['api_overrides'] : [];
+		$merged = [];
+
+		foreach ($manualEvents as $manualEvent) {
+			$manualEvent['source'] = 'manual';
+			$merged[] = $manualEvent;
 		}
 
-		$contents = file_get_contents($filePath);
-		if ($contents === false) {
-			return $this->getDefaultEvents();
+		foreach ($apiEvents as $apiEvent) {
+			$key = $this->buildApiEventKey($apiEvent);
+			$override = is_array($apiOverrides[$key] ?? null) ? $apiOverrides[$key] : [];
+			if (($override['deleted'] ?? false) === true) {
+				continue;
+			}
+
+			$merged[] = $this->applyApiOverride($apiEvent, $override);
 		}
 
-		$events = json_decode($contents, true);
-		if (!is_array($events)) {
-			return $this->getDefaultEvents();
+		if ($merged !== []) {
+			return $merged;
 		}
 
-		$events = array_values(array_filter($events, static fn ($event): bool => is_array($event)));
-
-		return $events !== [] ? $events : $this->getDefaultEvents();
-	}
-
-	/**
-	 * @param list<array<string, mixed>> $events
-	 */
-	private function writeRawEvents(array $events): void {
-		$filePath = $this->getEventsFilePath();
-		$directory = dirname($filePath);
-
-		if (!is_dir($directory)) {
-			mkdir($directory, 0775, true);
-		}
-
-		file_put_contents(
-			$filePath,
-			(string)json_encode(array_values($events), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-		);
+		return $this->normalizeManualEvents($this->getDefaultEvents());
 	}
 
 	/**
@@ -561,7 +677,284 @@ class EventService {
 		return trim($value);
 	}
 
-	private function getEventsFilePath(): string {
+	private function readManualState(): array {
+		$payload = $this->readJsonFile($this->getManualStateFilePath());
+		if (is_array($payload) && isset($payload['manual_events'], $payload['api_overrides'])) {
+			return [
+				'manual_events' => array_values(array_filter((array)$payload['manual_events'], static fn ($event): bool => is_array($event))),
+				'api_overrides' => is_array($payload['api_overrides']) ? $payload['api_overrides'] : [],
+			];
+		}
+
+		$legacyEvents = $this->readLegacyEvents();
+		if ($legacyEvents !== null) {
+			$split = $this->splitLegacyEvents($legacyEvents);
+			return [
+				'manual_events' => $split['manual_events'],
+				'api_overrides' => $split['api_overrides'],
+			];
+		}
+
+		return [
+			'manual_events' => [],
+			'api_overrides' => [],
+		];
+	}
+
+	private function writeManualState(array $state): void {
+		$this->writeJsonFile($this->getManualStateFilePath(), [
+			'manual_events' => $this->normalizeManualEvents((array)($state['manual_events'] ?? [])),
+			'api_overrides' => is_array($state['api_overrides'] ?? null) ? $state['api_overrides'] : [],
+		]);
+	}
+
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	private function readApiEvents(): array {
+		$payload = $this->readJsonFile($this->getApiEventsFilePath());
+		if (is_array($payload)) {
+			return array_values(array_map(fn (array $event): array => $this->normalizeApiEventRecord($event), array_filter($payload, static fn ($event): bool => is_array($event))));
+		}
+
+		$legacyEvents = $this->readLegacyEvents();
+		if ($legacyEvents !== null) {
+			$split = $this->splitLegacyEvents($legacyEvents);
+			return $split['api_events'];
+		}
+
+		return [];
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $events
+	 */
+	private function writeApiEvents(array $events): void {
+		$this->writeJsonFile(
+			$this->getApiEventsFilePath(),
+			array_values(array_map(fn (array $event): array => $this->normalizeApiEventRecord($event), array_filter($events, static fn ($event): bool => is_array($event)))),
+		);
+	}
+
+	/**
+	 * @return list<array<string, mixed>>|null
+	 */
+	private function readLegacyEvents(): ?array {
+		$payload = $this->readJsonFile($this->getLegacyEventsFilePath());
+		if (!is_array($payload)) {
+			return null;
+		}
+
+		return array_values(array_filter($payload, static fn ($event): bool => is_array($event)));
+	}
+
+	private function readJsonFile(string $filePath): mixed {
+		if (!is_file($filePath)) {
+			return null;
+		}
+
+		$contents = file_get_contents($filePath);
+		if ($contents === false) {
+			return null;
+		}
+
+		return json_decode($contents, true);
+	}
+
+	private function writeJsonFile(string $filePath, mixed $payload): void {
+		$directory = dirname($filePath);
+		if (!is_dir($directory)) {
+			mkdir($directory, 0775, true);
+		}
+
+		file_put_contents(
+			$filePath,
+			(string)json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+		);
+	}
+
+	private function normalizeManualEventRecord(array $event, int $fallbackId = 0): array {
+		$event['event_id'] = (int)($event['event_id'] ?? ($fallbackId > 0 ? $fallbackId : 0));
+		$event['source'] = 'manual';
+
+		return $event;
+	}
+
+	private function normalizeApiEventRecord(array $event): array {
+		$event['source'] = 'api';
+		$event['event_key'] = $this->buildApiEventKey($event);
+
+		return $event;
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $events
+	 * @return list<array<string, mixed>>
+	 */
+	private function normalizeManualEvents(array $events): array {
+		$normalized = [];
+		$nextId = 1;
+
+		foreach ($events as $event) {
+			if (!is_array($event)) {
+				continue;
+			}
+			$manualEvent = $this->normalizeManualEventRecord($event, $nextId);
+			$manualEvent['event_id'] = $manualEvent['event_id'] > 0 ? (int)$manualEvent['event_id'] : $nextId;
+			$normalized[] = $manualEvent;
+			$nextId = max($nextId, (int)$manualEvent['event_id'] + 1);
+		}
+
+		return $normalized;
+	}
+
+	private function getNextManualEventId(array $manualEvents): int {
+		$maxId = 0;
+		foreach ($manualEvents as $event) {
+			$maxId = max($maxId, (int)($event['event_id'] ?? 0));
+		}
+
+		return $maxId + 1;
+	}
+
+	private function buildApiEventKey(array $event): string {
+		$existingKey = trim((string)($event['event_key'] ?? ''));
+		if ($existingKey !== '') {
+			return $existingKey;
+		}
+
+		$parts = [
+			$this->cleanText((string)($event['title'] ?? '')),
+			$this->cleanText((string)($event['date'] ?? '')),
+			$this->cleanText((string)($event['month'] ?? '')),
+			$this->cleanText((string)($event['day'] ?? '')),
+			$this->cleanText((string)($event['time'] ?? '')),
+			$this->cleanText((string)($event['place'] ?? '')),
+			$this->cleanText((string)($event['location'] ?? '')),
+			trim((string)($event['link'] ?? '')),
+		];
+
+		return sha1(implode('|', $parts));
+	}
+
+	private function buildApiEventId(string $eventKey): int {
+		return -((int)sprintf('%u', crc32('api:' . $eventKey)));
+	}
+
+	private function applyApiOverride(array $apiEvent, array $override): array {
+		$key = $this->buildApiEventKey($apiEvent);
+		$merged = $this->normalizeApiEventRecord($apiEvent);
+		$merged['event_id'] = $this->buildApiEventId($key);
+		$merged['event_key'] = $key;
+
+		foreach (['description', 'sort_order', 'staff', 'documents', 'chat'] as $field) {
+			if (array_key_exists($field, $override)) {
+				$merged[$field] = $override[$field];
+			}
+		}
+
+		return $merged;
+	}
+
+	private function resolveEventReference(int $id): ?array {
+		$manualState = $this->readManualState();
+		$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+		foreach ($manualEvents as $index => $event) {
+			if ((int)($event['event_id'] ?? 0) !== $id) {
+				continue;
+			}
+
+			return [
+				'source' => 'manual',
+				'index' => $index,
+				'event' => $event,
+				'event_id' => $id,
+				'storage_id' => 'manual-' . $id,
+			];
+		}
+
+		foreach ($this->readApiEvents() as $index => $apiEvent) {
+			$key = $this->buildApiEventKey($apiEvent);
+			$apiId = $this->buildApiEventId($key);
+			if ($apiId !== $id) {
+				continue;
+			}
+
+			$override = is_array($manualState['api_overrides'][$key] ?? null) ? $manualState['api_overrides'][$key] : [];
+			if (($override['deleted'] ?? false) === true) {
+				return null;
+			}
+
+			return [
+				'source' => 'api',
+				'index' => $index,
+				'event' => $this->applyApiOverride($apiEvent, $override),
+				'event_id' => $apiId,
+				'event_key' => $key,
+				'storage_id' => 'api-' . substr(hash('sha256', $key), 0, 20),
+			];
+		}
+
+		return null;
+	}
+
+	private function splitLegacyEvents(array $events): array {
+		$manualEvents = [];
+		$apiEvents = [];
+		$apiOverrides = [];
+		$nextManualId = 1;
+
+		foreach ($events as $event) {
+			if (!is_array($event)) {
+				continue;
+			}
+
+			if ($this->detectSource($event) === 'api') {
+				$apiEvent = $this->normalizeApiEventRecord($event);
+				$key = $this->buildApiEventKey($apiEvent);
+				$apiEvents[] = $apiEvent;
+
+				$override = [];
+				foreach (['description', 'sort_order', 'staff', 'documents', 'chat'] as $field) {
+					if (!array_key_exists($field, $event)) {
+						continue;
+					}
+
+					$value = $event[$field];
+					if ($value === [] || $value === '') {
+						continue;
+					}
+
+					$override[$field] = $value;
+				}
+
+				if ($override !== []) {
+					$apiOverrides[$key] = $override;
+				}
+				continue;
+			}
+
+			$manualEvent = $this->normalizeManualEventRecord($event, $nextManualId);
+			$manualEvents[] = $manualEvent;
+			$nextManualId = max($nextManualId, (int)$manualEvent['event_id'] + 1);
+		}
+
+		return [
+			'manual_events' => $manualEvents,
+			'api_events' => $apiEvents,
+			'api_overrides' => $apiOverrides,
+		];
+	}
+
+	private function getManualStateFilePath(): string {
+		return \OC::$SERVERROOT . '/custom_apps/' . Application::APP_ID . '/data/manual_state.json';
+	}
+
+	private function getApiEventsFilePath(): string {
+		return \OC::$SERVERROOT . '/custom_apps/' . Application::APP_ID . '/data/api_events.json';
+	}
+
+	private function getLegacyEventsFilePath(): string {
 		return \OC::$SERVERROOT . '/custom_apps/' . Application::APP_ID . '/data/events.json';
 	}
 
@@ -569,16 +962,16 @@ class EventService {
 		return \OC::$SERVERROOT . '/custom_apps/' . Application::APP_ID . '/data/documents';
 	}
 
-	private function getDocumentsDirectoryPath(int $id): string {
-		return $this->getDocumentsRootPath() . '/event-' . $id;
+	private function getDocumentsDirectoryPath(string $storageId): string {
+		return $this->getDocumentsRootPath() . '/event-' . preg_replace('/[^a-z0-9._-]+/i', '-', $storageId);
 	}
 
-	private function getDocumentPath(int $id, string $storedName): string {
-		return $this->getDocumentsDirectoryPath($id) . '/' . $storedName;
+	private function getDocumentPath(string $storageId, string $storedName): string {
+		return $this->getDocumentsDirectoryPath($storageId) . '/' . $storedName;
 	}
 
-	private function deleteDocumentsDirectory(int $id): void {
-		$directory = $this->getDocumentsDirectoryPath($id);
+	private function deleteDocumentsDirectory(string $storageId): void {
+		$directory = $this->getDocumentsDirectoryPath($storageId);
 		if (!is_dir($directory)) {
 			return;
 		}

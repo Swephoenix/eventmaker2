@@ -2,7 +2,7 @@
 set -euo pipefail
 
 URL="${EVENT_SOURCE_URL:-https://ambitionsverige.se/wp-json/amb/v1/events}"
-OUT="${1:-${EVENTS_OUT:-events.json}}"
+OUT="${1:-${EVENTS_OUT:-api_events.json}}"
 TMP_JSON="$(mktemp)"
 
 cleanup() {
@@ -21,6 +21,7 @@ if ! python3 - "$TMP_JSON" "$OUT" <<'PY'
 import json
 import os
 import sys
+import hashlib
 
 src, dst = sys.argv[1], sys.argv[2]
 
@@ -44,6 +45,16 @@ for index, item in enumerate(payload, start=1):
     place = str(item.get("place", "")).strip()
     location = str(item.get("location", "")).strip()
     events.append({
+        "event_key": hashlib.sha1("|".join([
+            title,
+            date,
+            month,
+            day,
+            time,
+            place,
+            location,
+            str(item.get("link", "")).strip(),
+        ]).encode("utf-8")).hexdigest(),
         "title": title,
         "date": date,
         "month": month,
