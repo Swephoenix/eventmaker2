@@ -7,6 +7,8 @@ namespace OCA\BookedEventsWidget\Controller;
 use OCA\BookedEventsWidget\AppInfo\Application;
 use OCA\BookedEventsWidget\Service\EventService;
 use OCP\AppFramework\Controller;
+use OCP\AppFramework\Http\ContentSecurityPolicy;
+use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -40,33 +42,30 @@ class PageController extends Controller {
 		\OCP\Util::addStyle(Application::APP_ID, 'manage');
 		\OCP\Util::addScript(Application::APP_ID, 'manage');
 
-		$events = array_map(function (array $event): array {
-			$event['updateUrl'] = $this->urlGenerator->linkToRoute(
-				'booked_events_widget.page.update',
-				['id' => (int)$event['id']],
-			);
-			$event['saveStaffUrl'] = $this->urlGenerator->linkToRoute(
-				'booked_events_widget.page.saveStaff',
-				['id' => (int)$event['id']],
-			);
-			$event['saveChatUrl'] = $this->urlGenerator->linkToRoute(
-				'booked_events_widget.page.saveChat',
-				['id' => (int)$event['id']],
-			);
-			$event['deleteUrl'] = $this->urlGenerator->linkToRoute(
-				'booked_events_widget.page.delete',
-				['id' => (int)$event['id']],
-			);
+		$events = $this->buildClientEvents();
 
-			return $event;
-		}, $this->eventService->getEventsWithIds());
-
-		return new TemplateResponse(Application::APP_ID, 'manage', [
+		$response = new TemplateResponse(Application::APP_ID, 'manage', [
 			'events' => $events,
 			'createUrl' => $this->urlGenerator->linkToRoute('booked_events_widget.page.create'),
+			'stateUrl' => $this->urlGenerator->linkToRoute('booked_events_widget.page.state'),
 			'users' => $this->getAvailableUsers(),
 			'currentUser' => $this->getCurrentUser(),
 			'viewMode' => $viewMode,
+		]);
+
+		$policy = new ContentSecurityPolicy();
+		$policy->addAllowedFrameDomain('https://sverigekarta-ambswe.onrender.com');
+		$response->setContentSecurityPolicy($policy);
+
+		return $response;
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function state(): JSONResponse {
+		return new JSONResponse([
+			'events' => $this->buildClientEvents(),
+			'currentUser' => $this->getCurrentUser(),
 		]);
 	}
 
@@ -148,6 +147,32 @@ class PageController extends Controller {
 	}
 
 	/**
+	 * @return list<array<string, mixed>>
+	 */
+	private function buildClientEvents(): array {
+		return array_map(function (array $event): array {
+			$event['updateUrl'] = $this->urlGenerator->linkToRoute(
+				'booked_events_widget.page.update',
+				['id' => (int)$event['id']],
+			);
+			$event['saveStaffUrl'] = $this->urlGenerator->linkToRoute(
+				'booked_events_widget.page.saveStaff',
+				['id' => (int)$event['id']],
+			);
+			$event['saveChatUrl'] = $this->urlGenerator->linkToRoute(
+				'booked_events_widget.page.saveChat',
+				['id' => (int)$event['id']],
+			);
+			$event['deleteUrl'] = $this->urlGenerator->linkToRoute(
+				'booked_events_widget.page.delete',
+				['id' => (int)$event['id']],
+			);
+
+			return $event;
+		}, $this->eventService->getEventsWithIds());
+	}
+
+	/**
 	 * @return list<array{id: string, label: string, email: string, firstName: string, lastName: string}>
 	 */
 	private function getAvailableUsers(): array {
@@ -174,7 +199,7 @@ class PageController extends Controller {
 	}
 
 	/**
-	 * @return array{id: string, label: string}|null
+	 * @return array{id: string, label: string, email: string}|null
 	 */
 	private function getCurrentUser(): ?array {
 		$user = $this->userSession->getUser();
@@ -187,6 +212,7 @@ class PageController extends Controller {
 		return [
 			'id' => $user->getUID(),
 			'label' => $displayName !== '' ? $displayName : $user->getUID(),
+			'email' => trim((string)$user->getEMailAddress()),
 		];
 	}
 }

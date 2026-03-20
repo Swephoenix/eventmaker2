@@ -30,6 +30,7 @@
 	const sendBtn = document.getElementById('sendBtn');
 	const bookedOnlyToggle = document.getElementById('bookedOnlyToggle');
 	const requesttoken = root.dataset.requesttoken || '';
+	const stateUrl = root.dataset.stateUrl || '';
 	const viewMode = root.dataset.viewMode || 'admin';
 
 	function escapeHtml(str) {
@@ -81,16 +82,70 @@
 		return parts.join(' • ');
 	}
 
+	function normalizeIdentity(value) {
+		return String(value || '')
+			.trim()
+			.toLowerCase()
+			.normalize('NFD')
+			.replace(/[\u0300-\u036f]/g, '')
+			.replace(/[._-]+/g, ' ')
+			.replace(/\s+/g, ' ');
+	}
+
 	function isBookedForCurrentUser(event) {
 		if (!state.currentUser?.id) {
 			return false;
 		}
 
-		return Array.isArray(event.staff) && event.staff.some((person) => person.userId === state.currentUser.id);
+		const currentIdentityParts = [
+			state.currentUser.id,
+			state.currentUser.label,
+			state.currentUser.email,
+			String(state.currentUser.email || '').split('@')[0],
+		]
+			.map(normalizeIdentity)
+			.filter(Boolean);
+		const currentIdentities = new Set(currentIdentityParts);
+
+		return Array.isArray(event.staff) && event.staff.some((person) => {
+			const personIdentities = [
+				person.userId,
+				person.email,
+				String(person.email || '').split('@')[0],
+				[person.firstName, person.lastName].filter(Boolean).join(' '),
+			]
+				.map(normalizeIdentity)
+				.filter(Boolean);
+
+			return personIdentities.some((identity) => currentIdentities.has(identity));
+		});
 	}
 
 	function getVisibleEvents() {
 		return Object.values(state.events).filter((event) => !state.bookedOnly || isBookedForCurrentUser(event));
+	}
+
+	function getEventAccent(eventId) {
+		const palette = [
+			{ card: '#d9e5ff', border: '#416fcf', date: '#bed3ff', month: '#244d9a' },
+			{ card: '#d7f1e3', border: '#2f9360', date: '#b7e4cb', month: '#1f6a45' },
+			{ card: '#ffe4c7', border: '#d67a1c', date: '#ffd0a1', month: '#9a4f05' },
+			{ card: '#eadcff', border: '#7b4fc9', date: '#dac2ff', month: '#553093' },
+			{ card: '#d8f0f4', border: '#2f8a9a', date: '#bae3ea', month: '#1d6170' },
+			{ card: '#ffd9e4', border: '#c4517a', date: '#ffc0d2', month: '#8f2f55' },
+		];
+		const numericId = Number(eventId);
+		const index = Number.isNaN(numericId) ? 0 : Math.abs(numericId) % palette.length;
+		return palette[index];
+	}
+
+	function applyActiveEventAccent() {
+		const activeEvent = getActiveEvent();
+		const accent = getEventAccent(activeEvent?.id ?? 0);
+		root.style.setProperty('--active-event-border', accent.border);
+		root.style.setProperty('--active-event-soft', accent.card);
+		root.style.setProperty('--active-event-date', accent.date);
+		root.style.setProperty('--active-event-month', accent.month);
 	}
 
 	function serializeStaff(staff) {
@@ -102,6 +157,14 @@
 			role: String(person.role || ''),
 			area: String(person.area || ''),
 		})));
+	}
+
+	function mergeRemoteEvent(localEvent, remoteEvent) {
+		return {
+			...remoteEvent,
+			material: Array.isArray(localEvent?.material) ? localEvent.material : Array.isArray(remoteEvent.material) ? remoteEvent.material : [],
+			marketing: Array.isArray(localEvent?.marketing) ? localEvent.marketing : Array.isArray(remoteEvent.marketing) ? remoteEvent.marketing : [],
+		};
 	}
 
 	function buildCalendarMarkup(dateText) {
@@ -407,7 +470,7 @@
 			<div class="panel-head">
 				<div>
 					<h3 class="panel-title">Personal</h3>
-					<p class="panel-copy">Välj en registrerad Nextcloud-user i dropdownen eller lämna valet tomt för att lägga till en extern person med namn och mejl.</p>
+					<p class="panel-copy">Välj en registrerad Nextcloud-user i dropdownen eller lämna den på Välj person för att fylla i en extern person manuellt.</p>
 				</div>
 				<div class="actions">
 					<button class="btn btn-primary" type="button" id="saveStaffBtn">Spara personal</button>
@@ -423,8 +486,8 @@
 					<table class="staff-table">
 						<thead>
 							<tr>
-								<th>Person</th>
 								<th>Roll</th>
+								<th>Person</th>
 								<th>Ansvarsområde</th>
 								<th>E-post</th>
 								<th>Ta bort</th>
@@ -434,15 +497,19 @@
 							${event.staff.map((person, index) => `
 								${(() => {
 									const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
-									const isManual = !person.userId;
+									const hasManualDetails = Boolean(person.firstName || person.lastName || person.email);
+									const isManual = !person.userId && hasManualDetails;
+									const selectedValue = person.userId || (isManual ? '__external__' : '');
 									return `
 								<tr>
+									<td><input class="table-input" data-type="role" data-index="${index}" value="${escapeHtml(person.role)}"></td>
 									<td>
 										<div class="staff-person-cell">
 											<select class="table-select staff-user-select" data-index="${index}">
-												<option value="">Ny eller extern person</option>
+												<option value="">Välj person</option>
+												<option value="__external__" ${selectedValue === '__external__' ? 'selected' : ''}>Extern person</option>
 												${state.availableUsers.map((user) => `
-													<option value="${escapeHtml(user.id)}" ${person.userId === user.id ? 'selected' : ''}>${escapeHtml(user.label)}</option>
+													<option value="${escapeHtml(user.id)}" ${selectedValue === user.id ? 'selected' : ''}>${escapeHtml(user.label)}</option>
 												`).join('')}
 											</select>
 											${isManual ? `
@@ -455,7 +522,6 @@
 											`}
 										</div>
 									</td>
-									<td><input class="table-input" data-type="role" data-index="${index}" value="${escapeHtml(person.role)}"></td>
 									<td><input class="table-input" data-type="area" data-index="${index}" value="${escapeHtml(person.area)}"></td>
 									<td>
 										<input class="table-input staff-email-input" data-index="${index}" value="${escapeHtml(isManual ? (person.email || '') : (selectedUser?.email || ''))}" ${isManual ? '' : 'readonly aria-readonly="true"'} placeholder="mejl@example.com">
@@ -474,13 +540,21 @@
 		dynamicContent.querySelectorAll('.staff-user-select').forEach((select) => {
 			select.addEventListener('change', (e) => {
 				const index = Number(e.target.dataset.index);
-				const userId = e.target.value;
+				const selectedValue = e.target.value;
+				const isExternal = selectedValue === '__external__';
+				const userId = !isExternal ? selectedValue : '';
 				const selectedUser = userId ? getAvailableUser(userId) : null;
 
 				event.staff[index].userId = userId;
-				event.staff[index].firstName = selectedUser?.firstName || '';
-				event.staff[index].lastName = selectedUser?.lastName || '';
-				event.staff[index].email = selectedUser?.email || '';
+				if (selectedUser) {
+					event.staff[index].firstName = selectedUser.firstName || '';
+					event.staff[index].lastName = selectedUser.lastName || '';
+					event.staff[index].email = selectedUser.email || '';
+				} else if (!isExternal) {
+					event.staff[index].firstName = '';
+					event.staff[index].lastName = '';
+					event.staff[index].email = '';
+				}
 				renderStaff();
 			});
 		});
@@ -627,8 +701,11 @@
 							<input class="check" type="checkbox" data-index="${index}" ${item.done ? 'checked' : ''} aria-label="Markera som klar">
 							<div class="check-main">
 								<input class="check-text" type="text" data-index="${index}" value="${escapeHtml(item.text)}">
+							</div>
+							<div class="check-owner-block">
+								<div class="small check-owner-label">Ansvarig person</div>
 								<select class="check-owner-select" data-index="${index}">
-									<option value="">Ny eller extern person</option>
+									<option value="">Välj person</option>
 									${state.availableUsers.map((user) => `
 										<option value="${escapeHtml(user.id)}" ${item.ownerUserId === user.id ? 'selected' : ''}>${escapeHtml(user.label)}</option>
 									`).join('')}
@@ -636,6 +713,10 @@
 								${isManualOwner
 									? `<input class="check-owner" type="text" data-index="${index}" value="${escapeHtml(item.ownerName || '')}" placeholder="Ansvarig person">`
 									: `<div class="small check-owner-meta">${escapeHtml(ownerUser?.label || '')}</div>`}
+							</div>
+							<div class="check-notes-block">
+								<div class="small check-notes-label">Anteckningar</div>
+								<textarea class="check-notes" data-index="${index}" placeholder="Skriv anteckningar för momentet">${escapeHtml(item.notes || '')}</textarea>
 							</div>
 							<button class="icon-btn remove-item" type="button" data-index="${index}" aria-label="Ta bort checklistepunkt">×</button>
 						</div>
@@ -680,6 +761,13 @@
 			});
 		});
 
+		dynamicContent.querySelectorAll('.check-notes').forEach((input) => {
+			input.addEventListener('input', (e) => {
+				const index = Number(e.target.dataset.index);
+				event.material[index].notes = e.target.value;
+			});
+		});
+
 		dynamicContent.querySelectorAll('.remove-item').forEach((btn) => {
 			btn.addEventListener('click', (e) => {
 				const index = Number(e.currentTarget.dataset.index);
@@ -691,7 +779,7 @@
 		const addBtn = document.getElementById('addChecklistBtn');
 		if (addBtn) {
 			addBtn.addEventListener('click', () => {
-				event.material.push({ text: '', done: false, ownerUserId: '', ownerName: '' });
+				event.material.push({ text: '', done: false, ownerUserId: '', ownerName: '', notes: '' });
 				renderMaterial();
 			});
 		}
@@ -719,6 +807,7 @@
 						<div class="summary-list">
 							<div><span>Moment</span><strong>${escapeHtml(item.text || 'Tom punkt')}</strong></div>
 							<div><span>Ansvarig</span><strong>${escapeHtml((item.ownerUserId ? (getAvailableUser(item.ownerUserId)?.label || item.ownerName) : item.ownerName) || 'Saknas')}</strong></div>
+							<div><span>Anteckning</span><strong>${escapeHtml(item.notes || 'Saknas')}</strong></div>
 						</div>
 					</div>
 				`).join('')}
@@ -774,6 +863,24 @@
 			</div>
 
 			<div class="empty-note">Exempel: Uppsala, Stockholm, Västerås, Enköping och andra orter inom rimligt avstånd från eventet.</div>
+
+			<div class="section-block marketing-map-block">
+				<div class="marketing-map-head">
+					<div>
+						<h4>Karta</h4>
+						<p>Överblick för geografisk planering och spridning i närområdet.</p>
+					</div>
+				</div>
+				<div class="marketing-map-frame-wrap">
+					<iframe
+						class="marketing-map-frame"
+						src="https://sverigekarta-ambswe.onrender.com/"
+						title="Sverigekarta för marknadsföring"
+						loading="lazy"
+						referrerpolicy="strict-origin-when-cross-origin"
+					></iframe>
+				</div>
+			</div>
 		`;
 
 		dynamicContent.querySelectorAll('.marketing-input').forEach((input) => {
@@ -880,16 +987,59 @@
 		}
 
 		eventButtons.forEach((button) => {
-			button.hidden = !visibleEventIds.has(button.dataset.eventId || '');
+			const accent = getEventAccent(button.dataset.eventId || 0);
+			button.style.setProperty('--event-card-bg', accent.card);
+			button.style.setProperty('--event-card-border', accent.border);
+			button.style.setProperty('--event-date-bg', accent.date);
+			button.style.setProperty('--event-month-color', accent.month);
+			const isVisible = visibleEventIds.has(button.dataset.eventId || '');
+			button.hidden = !isVisible;
+			button.classList.toggle('is-filtered-out', !isVisible);
+			button.style.display = isVisible ? '' : 'none';
+			button.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
 			button.classList.toggle('active', button.dataset.eventId === String(state.activeEventId));
 		});
 	}
 
 	function render() {
+		applyActiveEventAccent();
 		renderSidebar();
 		renderHeader();
 		renderChat();
 		renderActiveTab();
+	}
+
+	async function pollLiveState() {
+		if (viewMode !== 'eventpersonal' || !stateUrl) {
+			return;
+		}
+
+		try {
+			const response = await fetch(stateUrl, {
+				method: 'GET',
+				credentials: 'same-origin',
+				headers: {
+					Accept: 'application/json',
+				},
+			});
+			if (!response.ok) {
+				return;
+			}
+
+			const payload = await response.json();
+			const remoteEvents = Array.isArray(payload.events) ? payload.events : [];
+			const nextEvents = {};
+			remoteEvents.forEach((event) => {
+				nextEvents[String(event.id)] = mergeRemoteEvent(state.events[String(event.id)], event);
+			});
+			state.events = nextEvents;
+			if (payload.currentUser && typeof payload.currentUser.id === 'string') {
+				state.currentUser = payload.currentUser;
+			}
+			render();
+		} catch (error) {
+			// Ignore transient polling errors and retry on the next interval.
+		}
 	}
 
 	tabs.forEach((tab) => {
@@ -969,4 +1119,7 @@
 	});
 
 	render();
+	if (viewMode === 'eventpersonal' && stateUrl) {
+		window.setInterval(pollLiveState, 10000);
+	}
 })();

@@ -49,15 +49,8 @@ $clientEvents = array_map(static function (array $event): array {
 				'area' => (string)($person['area'] ?? ''),
 			];
 		}, (array)($event['staff'] ?? []))),
-		'material' => [
-			['text' => 'Ta med rollup', 'done' => false, 'ownerUserId' => '', 'ownerName' => ''],
-			['text' => 'Ta med flyers', 'done' => true, 'ownerUserId' => '', 'ownerName' => ''],
-			['text' => 'Kontrollera länkinformation för ' . $title, 'done' => false, 'ownerUserId' => '', 'ownerName' => ''],
-		],
-		'marketing' => [
-			['city' => $location, 'mailSent' => 'Ja', 'facebookPages' => 'Lokala grupper och evenemangssidor', 'comment' => 'Prioritera orten närmast eventet'],
-			['city' => 'Närliggande ort', 'mailSent' => 'Nej', 'facebookPages' => 'Regionala sidor', 'comment' => 'Skicka om det finns plats kvar'],
-		],
+		'material' => [],
+		'marketing' => [],
 		'chat' => array_values(array_map(static function (array $message): array {
 			return [
 				'type' => (string)($message['type'] ?? 'message'),
@@ -75,6 +68,7 @@ $clientEvents = array_map(static function (array $event): array {
 	class="bew-manage app"
 	data-requesttoken="<?php p($_['requesttoken']); ?>"
 	data-create-url="<?php p($_['createUrl']); ?>"
+	data-state-url="<?php p($_['stateUrl']); ?>"
 	data-view-mode="<?php p((string)$_['viewMode']); ?>"
 >
 	<script id="bew-state" type="application/json"><?php print_unescaped(json_encode(['events' => $clientEvents, 'users' => $_['users'], 'currentUser' => $_['currentUser']], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?></script>
@@ -87,7 +81,8 @@ $clientEvents = array_map(static function (array $event): array {
 				<?php if ((string)$_['viewMode'] === 'eventpersonal' && $_['currentUser'] !== null): ?>
 					<label class="sidebar-filter">
 						<input type="checkbox" id="bookedOnlyToggle">
-						<span>Visa bara event där jag är bokad</span>
+						<span class="sidebar-filter-switch" aria-hidden="true"></span>
+						<span class="sidebar-filter-label">Visa bara event där jag är bokad</span>
 					</label>
 				<?php endif; ?>
 			</div>

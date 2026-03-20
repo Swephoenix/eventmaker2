@@ -1,24 +1,45 @@
+name: eventmaker2
+
 services:
+  db:
+    image: mariadb:10.11
+    container_name: nc-eventplaner-db
+    restart: unless-stopped
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    environment:
+      MYSQL_ROOT_PASSWORD: nextcloud_root
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: nextcloud
+    volumes:
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/mariadb:/var/lib/mysql
+
   nextcloud:
     build:
       context: .
       dockerfile: Dockerfile
     image: nc-eventplaner-nextcloud:local
     container_name: nc-eventplaner
+    depends_on:
+      - db
     restart: unless-stopped
     ports:
       - "8080:80"
     environment:
       NEXTCLOUD_ADMIN_USER: admin
       NEXTCLOUD_ADMIN_PASSWORD: admin123
-      SQLITE_DATABASE: nextcloud
       NEXTCLOUD_TRUSTED_DOMAINS: localhost 127.0.0.1
+      MYSQL_HOST: db
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: nextcloud
     volumes:
-      - nextcloud_data:/var/www/html
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/nextcloud:/var/www/html
 
   nextcloud-init:
     image: nc-eventplaner-nextcloud:local
     depends_on:
+      - db
       - nextcloud
     restart: "no"
     environment:
@@ -74,11 +95,12 @@ services:
 
         echo "Initialization complete."
     volumes:
-      - nextcloud_data:/var/www/html
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/nextcloud:/var/www/html
 
   events-updater:
     image: nc-eventplaner-nextcloud:local
     depends_on:
+      - db
       - nextcloud
     restart: unless-stopped
     user: "33:33"
@@ -107,7 +129,4 @@ services:
           sleep 1800
         done
     volumes:
-      - nextcloud_data:/var/www/html
-
-volumes:
-  nextcloud_data:
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/nextcloud:/var/www/html

@@ -6,7 +6,6 @@
 	const manageUrl = OCP.InitialState.loadState(appId, 'manageUrl', '/apps/booked_events_widget/')
 	const personnelUrl = OCP.InitialState.loadState(appId, 'personnelUrl', `${manageUrl}?mode=eventpersonal`)
 	const upcomingEvents = events.filter((event) => !event.isPast)
-	const pastEvents = events.filter((event) => event.isPast)
 
 	const escapeHtml = (value) => String(value ?? '')
 		.replace(/&/g, '&amp;')
@@ -41,13 +40,10 @@
 		</div>
 	`
 
-	const renderToolbar = (view) => `
+	const renderToolbar = () => `
 		<div class="bew-widget__actions">
 			<a class="bew-widget__link" href="${escapeHtml(manageUrl)}">För eventplanerare</a>
 			<a class="bew-widget__secondary-link" href="${escapeHtml(personnelUrl)}">För eventpersonal</a>
-			<button class="bew-widget__secondary" type="button" data-toggle-history="true">
-				${view === 'past' ? 'Kommande event' : 'Tidigare event'}
-			</button>
 		</div>
 	`
 
@@ -90,17 +86,17 @@
 			el.style.display = 'flex'
 			el.style.flexDirection = 'column'
 			el.style.overflow = 'hidden'
-			const renderWidget = (view = 'upcoming') => {
-				const visibleEvents = view === 'past' ? pastEvents : upcomingEvents
+			const renderWidget = () => {
+				const visibleEvents = upcomingEvents
 				const markup = visibleEvents.length === 0
-					? `<div class="bew-empty">${view === 'past' ? 'Inga tidigare event tillgängliga.' : 'Inga aktuella eller kommande event tillgängliga just nu.'}</div>`
+					? `<div class="bew-empty">Inga aktuella eller kommande event tillgängliga just nu.</div>`
 					: `<ul class="bew-list">${visibleEvents.map((event, index) => renderEvent(event, index)).join('')}</ul>`
 
 				el.innerHTML = `
 					<div class="bew-widget">
 						${markup}
 						<div class="bew-widget__footer">
-							${renderToolbar(view)}
+							${renderToolbar()}
 						</div>
 						${renderDialog()}
 					</div>
@@ -118,14 +114,6 @@
 				el.querySelectorAll('[data-dialog-close]').forEach((closeButton) => {
 					closeButton.addEventListener('click', () => closeDialog(el))
 				})
-
-				const historyButton = el.querySelector('[data-toggle-history]')
-				if (historyButton) {
-					historyButton.addEventListener('click', () => {
-						closeDialog(el)
-						renderWidget(view === 'past' ? 'upcoming' : 'past')
-					})
-				}
 			}
 
 			renderWidget()

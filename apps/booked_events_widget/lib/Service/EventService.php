@@ -281,11 +281,7 @@ class EventService {
 			return $normalized;
 		}
 
-		return [
-			['userId' => '', 'firstName' => 'Eventansvarig', 'lastName' => '', 'email' => '', 'role' => $title, 'area' => 'Övergripande ansvar och samordning'],
-			['userId' => '', 'firstName' => 'Representant', 'lastName' => '', 'email' => '', 'role' => 'På plats', 'area' => $location],
-			['userId' => '', 'firstName' => 'Volontär', 'lastName' => '', 'email' => '', 'role' => 'Stöd', 'area' => 'Material, välkomnande och praktiskt stöd'],
-		];
+		return [];
 	}
 
 	/**
