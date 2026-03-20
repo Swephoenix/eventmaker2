@@ -16,8 +16,8 @@ services:
 
   nextcloud:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: app-nextcloud/Dockerfile
     image: nc-eventplaner-nextcloud:local
     container_name: nc-eventplaner
     depends_on:

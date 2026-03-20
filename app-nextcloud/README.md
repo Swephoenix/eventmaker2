@@ -2,6 +2,16 @@
 
 Det här projektet startar en minimal men färdigkonfigurerad Nextcloud i Docker och lägger till en egen dashboard-widget som visar bokade event på första sidan.
 
+## Utvecklingsflöde
+
+Appkoden har en enda källa:
+
+- `../enbart-app/booked_events_widget`
+
+Mappen `app-nextcloud` är nu bara Nextcloud-miljö och Docker-buildshim. När du vill ändra appen ska du alltså redigera filer i `enbart-app`, inte i `app-nextcloud`.
+
+Vid build kopieras appen från `enbart-app/booked_events_widget` in i Docker-imagen.
+
 ## Ingår
 
 - Nextcloud via Docker Compose
@@ -44,14 +54,22 @@ PERSISTENT_DATA_ROOT=/mnt/data/projects/data/eventmaker2 ./start_nextcloud.sh
 Följande kataloger används:
 
 - `${PERSISTENT_DATA_ROOT}/mariadb`
-- `${PERSISTENT_DATA_ROOT}/nextcloud` skapas bara av `./start_nextcloud.sh`, inte av `./prepare_persistent_data.sh`
+- `${PERSISTENT_DATA_ROOT}/nextcloud` skapas bara av `./start_nextcloud.sh`, inte av `../enbart-app/prepare_persistent_data.sh`
 
 För att skapa dem manuellt:
 
 ```bash
-./prepare_persistent_data.sh
+../enbart-app/prepare_persistent_data.sh
 ```
 
 ## Widgeten
 
 Widgeten visas på dashboarden och läser event från appens JSON-datafil samt API-importen via `getevent.sh`.
+
+## Viktigt
+
+Om du bygger om eller startar om Docker-miljön används alltid appfilerna från:
+
+```bash
+enbart-app/booked_events_widget
+```

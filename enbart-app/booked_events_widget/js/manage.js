@@ -31,6 +31,8 @@
 	const mainTitle = document.getElementById('mainTitle');
 	const mainDateBadge = document.getElementById('mainDateBadge');
 	const mainLocationBadge = document.getElementById('mainLocationBadge');
+	const mainDemoBannerRow = document.getElementById('mainDemoBannerRow');
+	const mainDemoBanner = document.getElementById('mainDemoBanner');
 	const chatInput = document.getElementById('chatInput');
 	const chatBox = document.getElementById('chatBox');
 	const sendBtn = document.getElementById('sendBtn');
@@ -218,7 +220,7 @@
 		}
 
 		const ownerIndex = event.staff.findIndex((person) => String(person.role || '').trim().toLowerCase() === 'eventansvarig');
-		const ownerRow = ownerIndex >= 0 ? event.staff.splice(ownerIndex, 1)[0] : { userId: '', firstName: '', lastName: '', email: '', role: 'Eventansvarig', area: '' };
+		const ownerRow = ownerIndex >= 0 ? event.staff.splice(ownerIndex, 1)[0] : { userId: '', firstName: '', lastName: '', email: '', phone: '', role: 'Eventansvarig', area: '' };
 		ownerRow.role = 'Eventansvarig';
 		event.staff.unshift(ownerRow);
 	}
@@ -374,6 +376,7 @@
 			firstName: String(person.firstName || ''),
 			lastName: String(person.lastName || ''),
 			email: String(person.email || ''),
+			phone: String(person.phone || ''),
 			role: String(person.role || ''),
 			area: String(person.area || ''),
 		})));
@@ -474,12 +477,14 @@
 			const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
 			const fullName = [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || selectedUser?.label || 'Inte tilldelad';
 			const email = person.userId ? (selectedUser?.email || person.email || 'Saknas') : (person.email || 'Saknas');
+			const phone = person.userId ? (selectedUser?.phone || person.phone || 'Saknas') : (person.phone || 'Saknas');
 			return `
 				<tr>
 					<td>${escapeHtml(person.role || 'Saknas')}</td>
 					<td>${escapeHtml(fullName)}</td>
 					<td>${escapeHtml(person.area || 'Saknas')}</td>
 					<td>${escapeHtml(email)}</td>
+					<td>${escapeHtml(phone)}</td>
 				</tr>
 			`;
 		}).join('') : '';
@@ -600,6 +605,9 @@
 			width: 100%;
 			border-collapse: collapse;
 		}
+		.print-table-staff {
+			table-layout: fixed;
+		}
 		.print-table td,
 		.print-table th {
 			padding: 10px 0;
@@ -619,6 +627,19 @@
 			color: var(--muted);
 			font-weight: 700;
 			padding-right: 16px;
+		}
+		.print-table-staff td:nth-child(4),
+		.print-table-staff th:nth-child(4) {
+			width: 26%;
+			padding-right: 20px;
+			overflow-wrap: anywhere;
+			word-break: break-word;
+		}
+		.print-table-staff td:nth-child(5),
+		.print-table-staff th:nth-child(5) {
+			width: 18%;
+			padding-left: 16px;
+			white-space: nowrap;
 		}
 		.print-empty {
 			margin: 0;
@@ -659,9 +680,9 @@
 			${staffRows ? `
 				<section class="print-section">
 					<h2>Personal</h2>
-					<table class="print-table">
+					<table class="print-table print-table-staff">
 						<thead>
-							<tr><th>Roll</th><th>Person</th><th>Ansvar</th><th>E-post</th></tr>
+							<tr><th>Roll</th><th>Person</th><th>Ansvar</th><th>E-post</th><th>Telefon</th></tr>
 						</thead>
 						<tbody>${staffRows}</tbody>
 					</table>
@@ -769,12 +790,24 @@
 			mainTitle.textContent = 'Inga event';
 			mainDateBadge.textContent = 'Datum saknas';
 			mainLocationBadge.textContent = 'Plats saknas';
+			if (mainDemoBannerRow) {
+				mainDemoBannerRow.hidden = true;
+			}
+			if (mainDemoBanner) {
+				mainDemoBanner.hidden = true;
+			}
 			return;
 		}
 
 		mainTitle.textContent = event.title;
 		mainDateBadge.textContent = event.date;
 		mainLocationBadge.textContent = event.location;
+		if (mainDemoBannerRow) {
+			mainDemoBannerRow.hidden = event.isDemo !== true;
+		}
+		if (mainDemoBanner) {
+			mainDemoBanner.hidden = event.isDemo !== true;
+		}
 	}
 
 	function renderChat() {
@@ -845,7 +878,6 @@
 		const isDemoEvent = event.isDemo === true;
 		const lockedAttr = isApiEvent ? 'readonly aria-readonly="true"' : '';
 		const calendarMarkup = buildCalendarMarkup(event.date);
-
 		dynamicContent.innerHTML = `
 			<div class="panel-head">
 				<div>
@@ -999,6 +1031,7 @@
 								<th>Person</th>
 								<th>Ansvarsområde</th>
 								<th>E-post</th>
+								<th>Telefon</th>
 								<th>Ta bort</th>
 							</tr>
 						</thead>
@@ -1006,7 +1039,7 @@
 							${event.staff.map((person, index) => `
 								${(() => {
 									const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
-									const hasManualDetails = Boolean(person.firstName || person.lastName || person.email);
+									const hasManualDetails = Boolean(person.firstName || person.lastName || person.email || person.phone);
 									const isManual = person.isExternal === true || (!person.userId && hasManualDetails);
 									const selectedValue = person.userId || (isManual ? '__external__' : '');
 									const isEventOwner = index === 0;
@@ -1036,6 +1069,9 @@
 									<td>
 										<input class="table-input staff-email-input" data-index="${index}" value="${escapeHtml(isManual ? (person.email || '') : (selectedUser?.email || ''))}" ${isManual ? '' : 'readonly aria-readonly="true"'} placeholder="mejl@example.com">
 									</td>
+									<td>
+										<input class="table-input staff-phone-input" data-index="${index}" value="${escapeHtml(isManual ? (person.phone || '') : (selectedUser?.phone || ''))}" ${isManual ? '' : 'readonly aria-readonly="true"'} placeholder="070-123 45 67">
+									</td>
 									<td>${isEventOwner ? '<span class="small">Fast roll</span>' : `<button class="icon-btn remove-person" type="button" data-index="${index}" aria-label="Ta bort person">×</button>`}</td>
 								</tr>
 									`;
@@ -1062,11 +1098,13 @@
 					event.staff[index].firstName = selectedUser.firstName || '';
 					event.staff[index].lastName = selectedUser.lastName || '';
 					event.staff[index].email = selectedUser.email || '';
+					event.staff[index].phone = selectedUser.phone || '';
 					event.staff[index].isExternal = false;
 				} else if (!isExternal) {
 					event.staff[index].firstName = '';
 					event.staff[index].lastName = '';
 					event.staff[index].email = '';
+					event.staff[index].phone = '';
 				}
 				renderStaff();
 			});
@@ -1087,6 +1125,16 @@
 				if (!event.staff[index].userId) {
 					markDirty();
 					event.staff[index].email = e.target.value;
+				}
+			});
+		});
+
+		dynamicContent.querySelectorAll('.staff-phone-input').forEach((input) => {
+			input.addEventListener('input', (e) => {
+				const index = Number(e.target.dataset.index);
+				if (!event.staff[index].userId) {
+					markDirty();
+					event.staff[index].phone = e.target.value;
 				}
 			});
 		});
@@ -1118,7 +1166,7 @@
 		if (addBtn) {
 			addBtn.addEventListener('click', () => {
 				markDirty();
-				event.staff.push({ userId: '', firstName: '', lastName: '', email: '', role: '', area: '', isExternal: false });
+				event.staff.push({ userId: '', firstName: '', lastName: '', email: '', phone: '', role: '', area: '', isExternal: false });
 				renderStaff();
 			});
 		}
@@ -1181,6 +1229,7 @@
 					const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
 					const fullName = [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || selectedUser?.label || 'Inte tilldelad';
 					const email = person.userId ? (selectedUser?.email || person.email || 'Saknas') : (person.email || 'Saknas');
+					const phone = person.userId ? (selectedUser?.phone || person.phone || 'Saknas') : (person.phone || 'Saknas');
 					return `
 						<div class="section-block summary-card">
 							<h4>${escapeHtml(fullName)}</h4>
@@ -1188,6 +1237,7 @@
 								<div><span>Roll</span><strong>${escapeHtml(person.role || 'Saknas')}</strong></div>
 								<div><span>Ansvar</span><strong>${escapeHtml(person.area || 'Saknas')}</strong></div>
 								<div><span>E-post</span><strong>${escapeHtml(email)}</strong></div>
+								<div><span>Telefon</span><strong>${escapeHtml(phone)}</strong></div>
 								<div><span>Källa</span><strong>${person.userId ? 'Nextcloud-user' : 'Extern person'}</strong></div>
 							</div>
 						</div>
@@ -1534,6 +1584,7 @@
 			: 'Ladda upp dokument kopplade till eventet, till exempel körschema, avtal, PDF:er och bildmaterial.';
 
 		dynamicContent.innerHTML = `
+			${getDemoOverlayMarkup(event)}
 			<div class="panel-head">
 				<div>
 					<h3 class="panel-title">Dokument</h3>

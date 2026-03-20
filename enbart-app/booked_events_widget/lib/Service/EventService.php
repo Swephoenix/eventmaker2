@@ -395,7 +395,7 @@ class EventService {
 
 	/**
 	 * @param list<array<string, mixed>> $staff
-	 * @return list<array{userId: string, firstName: string, lastName: string, email: string, role: string, area: string}>
+	 * @return list<array{userId: string, firstName: string, lastName: string, email: string, phone: string, role: string, area: string}>
 	 */
 	private function normalizeStaff(array $staff, string $title = '', string $location = ''): array {
 		$normalized = array_values(array_filter(array_map(function (array $person): array {
@@ -404,6 +404,7 @@ class EventService {
 				'firstName' => $this->cleanText((string)($person['firstName'] ?? '')),
 				'lastName' => $this->cleanText((string)($person['lastName'] ?? '')),
 				'email' => trim((string)($person['email'] ?? '')),
+				'phone' => trim((string)($person['phone'] ?? '')),
 				'role' => $this->cleanText((string)($person['role'] ?? '')),
 				'area' => $this->cleanText((string)($person['area'] ?? '')),
 			];
@@ -412,6 +413,7 @@ class EventService {
 				|| $person['firstName'] !== ''
 				|| $person['lastName'] !== ''
 				|| $person['email'] !== ''
+				|| $person['phone'] !== ''
 				|| $person['role'] !== ''
 				|| $person['area'] !== '';
 		}));
@@ -434,6 +436,7 @@ class EventService {
 				'firstName' => '',
 				'lastName' => '',
 				'email' => '',
+				'phone' => '',
 				'role' => 'Eventansvarig',
 				'area' => '',
 			];

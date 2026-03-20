@@ -6,6 +6,7 @@ namespace OCA\BookedEventsWidget\Controller;
 
 use OCA\BookedEventsWidget\AppInfo\Application;
 use OCA\BookedEventsWidget\Service\EventService;
+use OCP\Accounts\IAccountManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\ContentSecurityPolicy;
 use OCP\AppFramework\Http\DataDisplayResponse;
@@ -19,6 +20,7 @@ use OCP\IURLGenerator;
 use OCP\IUser;
 use OCP\IUserManager;
 use OCP\IUserSession;
+use Throwable;
 
 class PageController extends Controller {
 	public function __construct(
@@ -28,6 +30,7 @@ class PageController extends Controller {
 		private IURLGenerator $urlGenerator,
 		private IUserManager $userManager,
 		private IUserSession $userSession,
+		private IAccountManager $accountManager,
 	) {
 		parent::__construct($appName, $request);
 	}
@@ -246,13 +249,14 @@ class PageController extends Controller {
 	}
 
 	/**
-	 * @return list<array{id: string, label: string, email: string, firstName: string, lastName: string}>
+	 * @return list<array{id: string, label: string, email: string, phone: string, firstName: string, lastName: string}>
 	 */
 	private function getAvailableUsers(): array {
 		$users = array_map(function (IUser $user): array {
 			$displayName = trim($user->getDisplayName() ?? '');
 			$userId = $user->getUID();
 			$email = trim((string)$user->getEMailAddress());
+			$phone = $this->getUserPhone($user);
 			$nameParts = preg_split('/\s+/', $displayName, 2) ?: [];
 			$firstName = trim((string)($nameParts[0] ?? $displayName));
 			$lastName = trim((string)($nameParts[1] ?? ''));
@@ -261,6 +265,7 @@ class PageController extends Controller {
 				'id' => $userId,
 				'label' => $displayName !== '' ? $displayName : $userId,
 				'email' => $email,
+				'phone' => $phone,
 				'firstName' => $firstName,
 				'lastName' => $lastName,
 			];
@@ -269,6 +274,20 @@ class PageController extends Controller {
 		usort($users, static fn (array $left, array $right): int => strcasecmp($left['label'], $right['label']));
 
 		return $users;
+	}
+
+	private function getUserPhone(IUser $user): string {
+		try {
+			$account = $this->accountManager->getAccount($user);
+			$property = $account->getProperty('phone');
+			if ($property === null) {
+				return '';
+			}
+
+			return trim((string)$property->getValue());
+		} catch (Throwable) {
+			return '';
+		}
 	}
 
 	/**

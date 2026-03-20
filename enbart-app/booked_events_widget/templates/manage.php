@@ -47,6 +47,7 @@ $clientEvents = array_map(static function (array $event): array {
 				'firstName' => (string)($person['firstName'] ?? ''),
 				'lastName' => (string)($person['lastName'] ?? ''),
 				'email' => (string)($person['email'] ?? ''),
+				'phone' => (string)($person['phone'] ?? ''),
 				'role' => (string)($person['role'] ?? ''),
 				'area' => (string)($person['area'] ?? ''),
 			];
@@ -79,7 +80,7 @@ $clientEvents = array_map(static function (array $event): array {
 if ((string)$_['viewMode'] === 'admin') {
 	$clientEvents[] = [
 		'id' => 999001,
-		'title' => 'Testmässan',
+		'title' => 'Obs. Detta är demo. Går inte att ändra.',
 		'date' => 'november 14-16',
 		'location' => 'Stockholmsmässan • Monter B14',
 		'description' => 'Demoevent för en större mässa där ett parti ska ställa ut. Här finns exempel på extern personal, materialbehov och marknadsföringsplanering för att kunna testa hela planeringsflödet.',
@@ -93,10 +94,10 @@ if ((string)$_['viewMode'] === 'admin') {
 		'uploadDocumentUrl' => '',
 		'deleteUrl' => '',
 		'staff' => [
-			['userId' => '', 'firstName' => 'Monica', 'lastName' => 'Lind', 'email' => 'monica.lind@example.org', 'role' => 'Eventansvarig', 'area' => 'Monteransvar och schema'],
-			['userId' => '', 'firstName' => 'Johan', 'lastName' => 'Berg', 'email' => 'johan.berg@example.org', 'role' => 'Talare', 'area' => 'Scenpresentation och publikkontakt'],
-			['userId' => '', 'firstName' => 'Sara', 'lastName' => 'Holm', 'email' => 'sara.holm@example.org', 'role' => 'Volontär', 'area' => 'Utdelning av material'],
-			['userId' => '', 'firstName' => 'Emil', 'lastName' => 'Sund', 'email' => 'emil.sund@example.org', 'role' => 'Logistik', 'area' => 'Transport och uppsättning'],
+			['userId' => '', 'firstName' => 'Monica', 'lastName' => 'Lind', 'email' => 'monica.lind@example.org', 'phone' => '070-123 45 67', 'role' => 'Eventansvarig', 'area' => 'Monteransvar och schema'],
+			['userId' => '', 'firstName' => 'Johan', 'lastName' => 'Berg', 'email' => 'johan.berg@example.org', 'phone' => '070-234 56 78', 'role' => 'Talare', 'area' => 'Scenpresentation och publikkontakt'],
+			['userId' => '', 'firstName' => 'Sara', 'lastName' => 'Holm', 'email' => 'sara.holm@example.org', 'phone' => '070-345 67 89', 'role' => 'Volontär', 'area' => 'Utdelning av material'],
+			['userId' => '', 'firstName' => 'Emil', 'lastName' => 'Sund', 'email' => 'emil.sund@example.org', 'phone' => '070-456 78 90', 'role' => 'Logistik', 'area' => 'Transport och uppsättning'],
 		],
 		'material' => [
 			['text' => 'Rollup och backdrop till montern', 'done' => true, 'ownerUserId' => '', 'ownerName' => 'Emil Sund', 'notes' => 'Lastas in kvällen före mässstart.'],
@@ -168,6 +169,9 @@ if ((string)$_['viewMode'] === 'admin') {
 						<div class="main-meta">
 							<span class="badge" id="mainDateBadge">Datum</span>
 							<span class="badge" id="mainLocationBadge">Plats</span>
+						</div>
+						<div class="demo-banner-row" id="mainDemoBannerRow" hidden>
+							<span class="demo-banner" id="mainDemoBanner">Obs. Detta är demo. Går inte att ändra.</span>
 						</div>
 					</div>
 					<div class="main-head-actions">

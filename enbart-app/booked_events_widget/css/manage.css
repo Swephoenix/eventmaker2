@@ -308,6 +308,14 @@
 	gap: 8px;
 }
 
+.bew-manage .demo-banner-row[hidden] {
+	display: none;
+}
+
+.bew-manage .demo-banner-row {
+	margin-top: 10px;
+}
+
 .bew-manage .badge {
 	display: inline-flex;
 	align-items: center;
@@ -376,6 +384,25 @@
 
 .bew-manage .editor-panel {
 	padding: 16px;
+	position: relative;
+}
+
+.bew-manage .demo-banner[hidden] {
+	display: none;
+}
+
+.bew-manage .demo-banner {
+	display: inline-flex;
+	align-items: center;
+	min-height: 34px;
+	padding: 0 14px;
+	border-radius: 12px;
+	background: #000000;
+	color: #ffffff;
+	font-size: 13px;
+	font-weight: 850;
+	letter-spacing: 0.01em;
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 .bew-manage .panel-head {
