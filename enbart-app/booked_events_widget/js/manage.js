@@ -31,8 +31,6 @@
 	const mainTitle = document.getElementById('mainTitle');
 	const mainDateBadge = document.getElementById('mainDateBadge');
 	const mainLocationBadge = document.getElementById('mainLocationBadge');
-	const mainDemoBannerRow = document.getElementById('mainDemoBannerRow');
-	const mainDemoBanner = document.getElementById('mainDemoBanner');
 	const chatInput = document.getElementById('chatInput');
 	const chatBox = document.getElementById('chatBox');
 	const sendBtn = document.getElementById('sendBtn');
@@ -669,25 +667,25 @@
 			<p class="print-copy">${escapeHtml(event.description || 'Ingen intern anteckning tillagd ännu.')}</p>
 		</section>
 
+		${buildPrintTable('Översikt', buildPrintRows([
+			{ label: 'Titel', value: escapeHtml(event.title) },
+			{ label: 'Datum', value: escapeHtml(event.date) },
+			{ label: 'Plats', value: escapeHtml(event.location) },
+			{ label: 'Eventansvarig', value: escapeHtml(getPersonDisplayName(eventOwner)) },
+			{ label: 'Länk', value: event.link ? `<a class="print-link" href="${escapeHtml(event.link)}" target="_blank" rel="noreferrer">${escapeHtml(event.link)}</a>` : 'Saknas' },
+		]))}
+		${staffRows ? `
+			<section class="print-section">
+				<h2>Personal</h2>
+				<table class="print-table print-table-staff">
+					<thead>
+						<tr><th>Roll</th><th>Person</th><th>Ansvar</th><th>E-post</th><th>Telefon</th></tr>
+					</thead>
+					<tbody>${staffRows}</tbody>
+				</table>
+			</section>
+		` : `<section class="print-section"><h2>Personal</h2><p class="print-empty">Ingen personal tillagd.</p></section>`}
 		<div class="print-grid">
-			${buildPrintTable('Översikt', buildPrintRows([
-				{ label: 'Titel', value: escapeHtml(event.title) },
-				{ label: 'Datum', value: escapeHtml(event.date) },
-				{ label: 'Plats', value: escapeHtml(event.location) },
-				{ label: 'Eventansvarig', value: escapeHtml(getPersonDisplayName(eventOwner)) },
-				{ label: 'Länk', value: event.link ? `<a class="print-link" href="${escapeHtml(event.link)}" target="_blank" rel="noreferrer">${escapeHtml(event.link)}</a>` : 'Saknas' },
-			]))}
-			${staffRows ? `
-				<section class="print-section">
-					<h2>Personal</h2>
-					<table class="print-table print-table-staff">
-						<thead>
-							<tr><th>Roll</th><th>Person</th><th>Ansvar</th><th>E-post</th><th>Telefon</th></tr>
-						</thead>
-						<tbody>${staffRows}</tbody>
-					</table>
-				</section>
-			` : `<section class="print-section"><h2>Personal</h2><p class="print-empty">Ingen personal tillagd.</p></section>`}
 			${materialRows ? `
 				<section class="print-section">
 					<h2>Material</h2>
@@ -790,24 +788,12 @@
 			mainTitle.textContent = 'Inga event';
 			mainDateBadge.textContent = 'Datum saknas';
 			mainLocationBadge.textContent = 'Plats saknas';
-			if (mainDemoBannerRow) {
-				mainDemoBannerRow.hidden = true;
-			}
-			if (mainDemoBanner) {
-				mainDemoBanner.hidden = true;
-			}
 			return;
 		}
 
 		mainTitle.textContent = event.title;
 		mainDateBadge.textContent = event.date;
 		mainLocationBadge.textContent = event.location;
-		if (mainDemoBannerRow) {
-			mainDemoBannerRow.hidden = event.isDemo !== true;
-		}
-		if (mainDemoBanner) {
-			mainDemoBanner.hidden = event.isDemo !== true;
-		}
 	}
 
 	function renderChat() {

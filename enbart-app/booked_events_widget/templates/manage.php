@@ -80,7 +80,7 @@ $clientEvents = array_map(static function (array $event): array {
 if ((string)$_['viewMode'] === 'admin') {
 	$clientEvents[] = [
 		'id' => 999001,
-		'title' => 'Obs. Detta är demo. Går inte att ändra.',
+		'title' => 'Testmässan',
 		'date' => 'november 14-16',
 		'location' => 'Stockholmsmässan • Monter B14',
 		'description' => 'Demoevent för en större mässa där ett parti ska ställa ut. Här finns exempel på extern personal, materialbehov och marknadsföringsplanering för att kunna testa hela planeringsflödet.',
@@ -169,9 +169,6 @@ if ((string)$_['viewMode'] === 'admin') {
 						<div class="main-meta">
 							<span class="badge" id="mainDateBadge">Datum</span>
 							<span class="badge" id="mainLocationBadge">Plats</span>
-						</div>
-						<div class="demo-banner-row" id="mainDemoBannerRow" hidden>
-							<span class="demo-banner" id="mainDemoBanner">Obs. Detta är demo. Går inte att ändra.</span>
 						</div>
 					</div>
 					<div class="main-head-actions">
