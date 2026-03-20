@@ -44,7 +44,7 @@ PERSISTENT_DATA_ROOT=/mnt/data/projects/data/eventmaker2 ./start_nextcloud.sh
 Följande kataloger används:
 
 - `${PERSISTENT_DATA_ROOT}/mariadb`
-- `${PERSISTENT_DATA_ROOT}/nextcloud` om du faktiskt startar den lokala Nextcloud-containern med `./start_nextcloud.sh`
+- `${PERSISTENT_DATA_ROOT}/nextcloud` skapas bara av `./start_nextcloud.sh`, inte av `./prepare_persistent_data.sh`
 
 För att skapa dem manuellt:
 
