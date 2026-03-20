@@ -12,7 +12,7 @@ services:
       MYSQL_USER: nextcloud
       MYSQL_PASSWORD: nextcloud
     volumes:
-      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/mariadb:/var/lib/mysql
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data/eventmaker2}/mariadb:/var/lib/mysql
 
   nextcloud:
     build:
@@ -34,7 +34,7 @@ services:
       MYSQL_USER: nextcloud
       MYSQL_PASSWORD: nextcloud
     volumes:
-      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/nextcloud:/var/www/html
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data/eventmaker2}/nextcloud:/var/www/html
 
   nextcloud-init:
     image: nc-eventplaner-nextcloud:local
@@ -95,7 +95,7 @@ services:
 
         echo "Initialization complete."
     volumes:
-      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/nextcloud:/var/www/html
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data/eventmaker2}/nextcloud:/var/www/html
 
   events-updater:
     image: nc-eventplaner-nextcloud:local
@@ -129,4 +129,4 @@ services:
           sleep 1800
         done
     volumes:
-      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}/nextcloud:/var/www/html
+      - ${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data/eventmaker2}/nextcloud:/var/www/html

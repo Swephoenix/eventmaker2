@@ -26,7 +26,7 @@ Det här projektet startar en minimal men färdigkonfigurerad Nextcloud i Docker
 Standardplatsen för persistent data är:
 
 ```bash
-/mnt/data/projects/data
+/mnt/data/projects/data/eventmaker2
 ```
 
 Du kan ändra detta med miljövariabeln:
@@ -38,13 +38,13 @@ PERSISTENT_DATA_ROOT=/annan/sökväg
 Exempel:
 
 ```bash
-PERSISTENT_DATA_ROOT=/mnt/data/projects/data ./start_nextcloud.sh
+PERSISTENT_DATA_ROOT=/mnt/data/projects/data/eventmaker2 ./start_nextcloud.sh
 ```
 
 Följande kataloger används:
 
-- `${PERSISTENT_DATA_ROOT}/nextcloud`
 - `${PERSISTENT_DATA_ROOT}/mariadb`
+- `${PERSISTENT_DATA_ROOT}/nextcloud` om du faktiskt startar den lokala Nextcloud-containern med `./start_nextcloud.sh`
 
 För att skapa dem manuellt:
 

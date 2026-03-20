@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ID="${APP_ID:-booked_events_widget}"
 CONTAINER_NAME="${CONTAINER_NAME:-nextcloud}"
-APP_SOURCE_DIR="${APP_SOURCE_DIR:-$SCRIPT_DIR/export/$APP_ID}"
+APP_SOURCE_DIR="${APP_SOURCE_DIR:-$SCRIPT_DIR/$APP_ID}"
 TARGET_APPS_DIR="${TARGET_APPS_DIR:-/var/www/html/custom_apps}"
 OCC_USER="${OCC_USER:-www-data}"
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PERSISTENT_DATA_ROOT="${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data}"
+PERSISTENT_DATA_ROOT="${PERSISTENT_DATA_ROOT:-/mnt/data/projects/data/eventmaker2}"
 
 export PERSISTENT_DATA_ROOT
+export PREPARE_NEXTCLOUD_VOLUME=1
 
 "$(dirname "$0")/prepare_persistent_data.sh"
 
