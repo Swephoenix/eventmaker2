@@ -36,7 +36,6 @@
 	const chatBox = document.getElementById('chatBox');
 	const sendBtn = document.getElementById('sendBtn');
 	const printSummaryBtn = document.getElementById('printSummaryBtn');
-	const discardChangesBtn = document.getElementById('discardChangesBtn');
 	const bookedOnlyToggle = document.getElementById('bookedOnlyToggle');
 	const unsavedModal = document.getElementById('unsavedModal');
 	const unsavedModalMessage = document.getElementById('unsavedModalMessage');
@@ -69,18 +68,11 @@
 		return JSON.parse(JSON.stringify(event));
 	}
 
-	function updateDirtyUi() {
-		if (discardChangesBtn) {
-			discardChangesBtn.hidden = !state.dirty || viewMode === 'eventpersonal';
-		}
-	}
-
 	function resetDirtyState() {
 		state.dirty = false;
 		state.dirtyEventId = null;
 		state.dirtyTab = '';
 		state.dirtySnapshot = null;
-		updateDirtyUi();
 	}
 
 	function markDirty() {
@@ -99,8 +91,6 @@
 			state.dirtyTab = state.activeTab;
 			state.dirtySnapshot = cloneEvent(event);
 		}
-
-		updateDirtyUi();
 	}
 
 	function discardCurrentChanges() {
@@ -1889,7 +1879,6 @@
 
 	sendBtn?.addEventListener('click', sendMessage);
 	printSummaryBtn?.addEventListener('click', openPrintSummary);
-	discardChangesBtn?.addEventListener('click', discardCurrentChanges);
 	unsavedStayBtn?.addEventListener('click', () => closeUnsavedModal('stay'));
 	unsavedDiscardBtn?.addEventListener('click', () => {
 		discardCurrentChanges();

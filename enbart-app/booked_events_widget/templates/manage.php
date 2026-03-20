@@ -175,7 +175,6 @@ if ((string)$_['viewMode'] === 'admin') {
 						</div>
 					</div>
 					<div class="main-head-actions">
-						<button class="btn btn-secondary" type="button" id="discardChangesBtn" hidden>Spara inte ändringar</button>
 						<button class="btn btn-secondary" type="button" id="printSummaryBtn">Printa sammanfattning</button>
 					</div>
 				</div>
