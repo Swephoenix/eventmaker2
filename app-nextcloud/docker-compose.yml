@@ -66,15 +66,11 @@ services:
         echo "Syncing custom app into active Nextcloud volume..."
         TMP_API_EVENTS_FILE="/tmp/booked_events_widget_api_events.json"
         TMP_MANUAL_STATE_FILE="/tmp/booked_events_widget_manual_state.json"
-        TMP_LEGACY_EVENTS_FILE="/tmp/booked_events_widget_legacy_events.json"
         if [ -f /var/www/html/custom_apps/booked_events_widget/data/api_events.json ]; then
           cp /var/www/html/custom_apps/booked_events_widget/data/api_events.json "$$TMP_API_EVENTS_FILE"
         fi
         if [ -f /var/www/html/custom_apps/booked_events_widget/data/manual_state.json ]; then
           cp /var/www/html/custom_apps/booked_events_widget/data/manual_state.json "$$TMP_MANUAL_STATE_FILE"
-        fi
-        if [ -f /var/www/html/custom_apps/booked_events_widget/data/events.json ]; then
-          cp /var/www/html/custom_apps/booked_events_widget/data/events.json "$$TMP_LEGACY_EVENTS_FILE"
         fi
 
         mkdir -p /var/www/html/custom_apps
@@ -88,10 +84,6 @@ services:
         if [ -f "$$TMP_MANUAL_STATE_FILE" ]; then
           mkdir -p /var/www/html/custom_apps/booked_events_widget/data
           mv "$$TMP_MANUAL_STATE_FILE" /var/www/html/custom_apps/booked_events_widget/data/manual_state.json
-        fi
-        if [ -f "$$TMP_LEGACY_EVENTS_FILE" ]; then
-          mkdir -p /var/www/html/custom_apps/booked_events_widget/data
-          mv "$$TMP_LEGACY_EVENTS_FILE" /var/www/html/custom_apps/booked_events_widget/data/events.json
         fi
         chown -R www-data:www-data /var/www/html/custom_apps
 
