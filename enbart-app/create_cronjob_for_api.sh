@@ -14,15 +14,15 @@ if ! command -v crontab >/dev/null 2>&1; then
 	exit 1
 fi
 
-if [[ ! -x "$GETEVENT_SCRIPT" ]]; then
-	echo "Kunde inte hitta körbart skript: $GETEVENT_SCRIPT" >&2
+if [[ ! -f "$GETEVENT_SCRIPT" ]]; then
+	echo "Kunde inte hitta skript: $GETEVENT_SCRIPT" >&2
 	exit 1
 fi
 
 mkdir -p "$(dirname "$OUT_FILE")"
 touch "$LOG_FILE"
 
-printf -v BASH_COMMAND '%q' "cd $APP_DIR && ./$(basename "$GETEVENT_SCRIPT") $OUT_FILE >> $LOG_FILE 2>&1"
+printf -v BASH_COMMAND '%q' "cd $APP_DIR && /bin/bash $(basename "$GETEVENT_SCRIPT") $OUT_FILE >> $LOG_FILE 2>&1"
 printf -v CRON_LINE '*/5 * * * * EVENT_SOURCE_URL=%q /bin/bash -lc %s # %s' "$EVENT_SOURCE_URL" "$BASH_COMMAND" "$CRON_MARKER"
 
 CURRENT_CRONTAB="$(mktemp)"
