@@ -38,6 +38,7 @@ class EventService {
 			'date' => (string)$event['date'],
 			'location' => (string)$event['location'],
 			'description' => (string)$event['description'],
+			'internal_notes' => (string)$event['internal_notes'],
 			'link' => (string)$event['link'],
 			'isPast' => (bool)$event['is_past'],
 		], $this->getEventsWithIds());
@@ -74,6 +75,7 @@ class EventService {
 				'staff' => $this->normalizeStaff((array)($event['staff'] ?? [])),
 				'documents' => $this->normalizeDocuments((array)($event['documents'] ?? [])),
 				'chat' => $this->normalizeChat((array)($event['chat'] ?? []), (string)($event['title'] ?? '')),
+				'budget' => $this->normalizeBudget((array)($event['budget'] ?? [])),
 			];
 
 			if ($this->detectSource($normalizedEvent) === 'api') {
@@ -100,7 +102,7 @@ class EventService {
 		$this->writeManualState($manualState);
 	}
 
-	public function createEvent(string $title, string $date, string $location, string $description, string $link, int $sortOrder): void {
+	public function createEvent(string $title, string $date, string $location, string $description, string $internalNotes, string $link, int $sortOrder): void {
 		$manualState = $this->readManualState();
 		$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
 		$manualEvents[] = $this->normalizeManualEventRecord([
@@ -108,18 +110,20 @@ class EventService {
 			'date' => trim($date),
 			'location' => trim($location),
 			'description' => trim($description),
+			'internal_notes' => trim($internalNotes),
 			'link' => trim($link),
 			'sort_order' => $sortOrder,
 			'source' => 'manual',
 			'staff' => [],
 			'documents' => [],
 			'chat' => $this->getDefaultChat(trim($title)),
+			'budget' => [],
 		], $this->getNextManualEventId($manualEvents));
 		$manualState['manual_events'] = $manualEvents;
 		$this->writeManualState($manualState);
 	}
 
-	public function updateEvent(int $id, string $title, string $date, string $location, string $description, string $link, int $sortOrder): void {
+	public function updateEvent(int $id, string $title, string $date, string $location, string $description, string $internalNotes, string $link, int $sortOrder): void {
 		$reference = $this->resolveEventReference($id);
 		if ($reference === null) {
 			return;
@@ -137,6 +141,7 @@ class EventService {
 			$existingEvent['date'] = trim($date);
 			$existingEvent['location'] = trim($location);
 			$existingEvent['description'] = trim($description);
+			$existingEvent['internal_notes'] = trim($internalNotes);
 			$existingEvent['link'] = trim($link);
 			$existingEvent['sort_order'] = $sortOrder;
 			$existingEvent['source'] = 'manual';
@@ -150,6 +155,7 @@ class EventService {
 		$key = (string)$reference['event_key'];
 		$override = (array)($manualState['api_overrides'][$key] ?? []);
 		$override['description'] = trim($description);
+		$override['internal_notes'] = trim($internalNotes);
 		$override['sort_order'] = $sortOrder;
 		$override['deleted'] = false;
 		$manualState['api_overrides'][$key] = $override;
@@ -245,6 +251,39 @@ class EventService {
 		$key = (string)$reference['event_key'];
 		$override = (array)($manualState['api_overrides'][$key] ?? []);
 		$override['chat'] = $this->normalizeChat($chat, $title, false);
+		$override['deleted'] = false;
+		$manualState['api_overrides'][$key] = $override;
+		$this->writeManualState($manualState);
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $budget
+	 */
+	public function saveBudget(int $id, array $budget): void {
+		$reference = $this->resolveEventReference($id);
+		if ($reference === null) {
+			return;
+		}
+
+		$normalizedBudget = $this->normalizeBudget($budget);
+
+		if ($reference['source'] === 'manual') {
+			$manualState = $this->readManualState();
+			$manualEvents = $this->normalizeManualEvents((array)$manualState['manual_events']);
+			if (!isset($manualEvents[$reference['index']])) {
+				return;
+			}
+
+			$manualEvents[$reference['index']]['budget'] = $normalizedBudget;
+			$manualState['manual_events'] = $manualEvents;
+			$this->writeManualState($manualState);
+			return;
+		}
+
+		$manualState = $this->readManualState();
+		$key = (string)$reference['event_key'];
+		$override = (array)($manualState['api_overrides'][$key] ?? []);
+		$override['budget'] = $normalizedBudget;
 		$override['deleted'] = false;
 		$manualState['api_overrides'][$key] = $override;
 		$this->writeManualState($manualState);
@@ -446,6 +485,7 @@ class EventService {
 		$place = $this->cleanText((string)($event['place'] ?? ''));
 		$location = $this->cleanText((string)($event['location'] ?? ''));
 		$description = $this->cleanText((string)($event['description'] ?? ''));
+		$internalNotes = $this->cleanText((string)($event['internal_notes'] ?? ''));
 		$link = trim((string)($event['link'] ?? ''));
 
 		if ($date === '') {
@@ -482,10 +522,12 @@ class EventService {
 			'date' => $date,
 			'location' => $location,
 			'description' => $description,
+			'internal_notes' => $internalNotes,
 			'link' => $link,
 			'staff' => $this->normalizeStaff((array)($event['staff'] ?? []), $title, $location),
 			'documents' => $this->normalizeDocuments((array)($event['documents'] ?? [])),
 			'chat' => $this->normalizeChat((array)($event['chat'] ?? []), $title),
+			'budget' => $this->normalizeBudget((array)($event['budget'] ?? [])),
 			'is_api' => $this->isApiEvent($event),
 			'is_past' => $this->isPastEvent($month, $day),
 			'sort_order' => (int)($event['sort_order'] ?? (($index + 1) * 10)),
@@ -601,6 +643,24 @@ class EventService {
 			'senderUserId' => '',
 			'createdAt' => '',
 		]];
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $budget
+	 * @return list<array{label: string, type: string, amount: int, status: string, ownerUserId: string, ownerName: string, notes: string}>
+	 */
+	private function normalizeBudget(array $budget): array {
+		return array_values(array_filter(array_map(function (array $entry): array {
+			return [
+				'label' => $this->cleanText((string)($entry['label'] ?? '')),
+				'type' => in_array($entry['type'] ?? '', ['cost', 'income'], true) ? $entry['type'] : 'cost',
+				'amount' => (int)($entry['amount'] ?? 0),
+				'status' => in_array($entry['status'] ?? '', ['planned', 'booked', 'received'], true) ? $entry['status'] : 'planned',
+				'ownerUserId' => trim((string)($entry['ownerUserId'] ?? '')),
+				'ownerName' => $this->cleanText((string)($entry['ownerName'] ?? '')),
+				'notes' => $this->cleanText((string)($entry['notes'] ?? '')),
+			];
+		}, array_filter($budget, static fn ($entry): bool => is_array($entry))), static fn (array $entry): bool => $entry['label'] !== '' || $entry['amount'] > 0 || $entry['ownerName'] !== ''));
 	}
 
 	/**
@@ -847,7 +907,7 @@ class EventService {
 		$merged['event_id'] = $this->buildApiEventId($key);
 		$merged['event_key'] = $key;
 
-		foreach (['description', 'sort_order', 'staff', 'documents', 'chat'] as $field) {
+		foreach (['description', 'sort_order', 'staff', 'documents', 'chat', 'budget', 'internal_notes'] as $field) {
 			if (array_key_exists($field, $override)) {
 				$merged[$field] = $override[$field];
 			}
@@ -915,7 +975,7 @@ class EventService {
 				$apiEvents[] = $apiEvent;
 
 				$override = [];
-				foreach (['description', 'sort_order', 'staff', 'documents', 'chat'] as $field) {
+				foreach (['description', 'sort_order', 'staff', 'documents', 'chat', 'budget'] as $field) {
 					if (!array_key_exists($field, $event)) {
 						continue;
 					}

@@ -55,7 +55,10 @@
 
 		dialog.querySelector('.bew-dialog__title').textContent = event.title || 'Event'
 		dialog.querySelector('.bew-dialog__meta').textContent = [event.date, event.location].filter(Boolean).join(' • ')
-		dialog.querySelector('.bew-dialog__text').textContent = event.description || 'Mer information kommer senare.'
+		
+		// Show internal_notes if available, otherwise fall back to description
+		const displayText = event.internal_notes || event.description || 'Mer information kommer senare.'
+		dialog.querySelector('.bew-dialog__text').textContent = displayText
 
 		const link = dialog.querySelector('.bew-dialog__link')
 		if (event.link) {

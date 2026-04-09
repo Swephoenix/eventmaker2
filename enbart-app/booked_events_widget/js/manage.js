@@ -15,12 +15,13 @@
 		activeEventId: events[0]?.id ?? null,
 		availableUsers,
 		bookedOnly: false,
+		chatSending: false,
 		currentUser,
 		events: Object.fromEntries(events.map((event) => [String(event.id), event])),
 		dirty: false,
+		dirtyTabs: new Set(),       // Set of tab names that have unsaved changes
 		dirtyEventId: null,
-		dirtyTab: '',
-		dirtySnapshot: null,
+		dirtySnapshots: new Map(), // Map<tabName, clonedEvent>
 		submitting: false,
 		pendingNavigation: null,
 	};
@@ -71,8 +72,8 @@
 	function resetDirtyState() {
 		state.dirty = false;
 		state.dirtyEventId = null;
-		state.dirtyTab = '';
-		state.dirtySnapshot = null;
+		state.dirtyTabs.clear();
+		state.dirtySnapshots.clear();
 	}
 
 	function markDirty() {
@@ -85,20 +86,27 @@
 			return;
 		}
 
-		if (!state.dirty) {
+		const tabName = state.activeTab;
+		if (!state.dirtyTabs.has(tabName)) {
 			state.dirty = true;
 			state.dirtyEventId = event.id;
-			state.dirtyTab = state.activeTab;
-			state.dirtySnapshot = cloneEvent(event);
+			state.dirtyTabs.add(tabName);
+			state.dirtySnapshots.set(tabName, cloneEvent(event));
 		}
 	}
 
 	function discardCurrentChanges() {
-		if (!state.dirty || state.dirtyEventId === null || !state.dirtySnapshot) {
+		if (!state.dirty || state.dirtyEventId === null) {
 			return;
 		}
 
-		state.events[String(state.dirtyEventId)] = cloneEvent(state.dirtySnapshot);
+		// Restore all dirty tab snapshots.
+		for (const tabName of state.dirtyTabs) {
+			const snapshot = state.dirtySnapshots.get(tabName);
+			if (snapshot && state.events[String(state.dirtyEventId)]) {
+				state.events[String(state.dirtyEventId)] = cloneEvent(snapshot);
+			}
+		}
 		resetDirtyState();
 		render();
 	}
@@ -110,8 +118,13 @@
 
 		return new Promise((resolve) => {
 			state.pendingNavigation = resolve;
+			const dirtyLabels = Array.from(state.dirtyTabs).map((tab) => {
+				return { overview: 'Översikt', staff: 'Personal', material: 'Material', marketing: 'Marknadsföring', budget: 'Budget', documents: 'Dokument' }[tab] || tab;
+			}).join(', ');
 			if (unsavedModalMessage) {
-				unsavedModalMessage.textContent = 'Du har osparade ändringar i den här vyn. Vill du spara dem innan du fortsätter?';
+				unsavedModalMessage.textContent = dirtyLabels
+					? `Du har osparade ändringar i ${dirtyLabels}. Vill du spara dem innan du fortsätter?`
+					: 'Du har osparade ändringar i den här vyn. Vill du spara dem innan du fortsätter?';
 			}
 			if (unsavedSaveBtn) {
 				unsavedSaveBtn.disabled = false;
@@ -119,19 +132,62 @@
 			}
 			if (unsavedModal) {
 				unsavedModal.hidden = false;
+				// Focus the first actionable button in the dialog.
+				if (unsavedSaveBtn) {
+					unsavedSaveBtn.focus();
+				}
 			}
 		});
 	}
 
 	function closeUnsavedModal(result) {
+		// Restore focus to the element that triggered the navigation if possible.
+		const previouslyFocused = document.activeElement;
 		if (unsavedModal) {
 			unsavedModal.hidden = true;
+		}
+		if (previouslyFocused && unsavedModal && previouslyFocused.closest('.bew-manage')) {
+			previouslyFocused.focus();
 		}
 		const resolver = state.pendingNavigation;
 		state.pendingNavigation = null;
 		if (resolver) {
 			resolver(result);
 		}
+	}
+
+	// Focus trap for the unsaved modal dialog.
+	if (unsavedModal) {
+		unsavedModal.addEventListener('keydown', (e) => {
+			if (unsavedModal.hidden) {
+				return;
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				closeUnsavedModal('stay');
+				return;
+			}
+			if (e.key !== 'Tab') {
+				return;
+			}
+			const focusableElements = Array.from(unsavedModal.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+			if (focusableElements.length === 0) {
+				return;
+			}
+			const firstEl = focusableElements[0];
+			const lastEl = focusableElements[focusableElements.length - 1];
+			if (e.shiftKey) {
+				if (document.activeElement === firstEl) {
+					e.preventDefault();
+					lastEl.focus();
+				}
+			} else {
+				if (document.activeElement === lastEl) {
+					e.preventDefault();
+					firstEl.focus();
+				}
+			}
+		});
 	}
 
 	async function persistOverview(event) {
@@ -141,6 +197,7 @@
 			date: String(event.date || ''),
 			location: String(event.location || ''),
 			description: String(event.description || ''),
+			internal_notes: String(event.internal_notes || ''),
 			link: String(event.link || ''),
 			sort_order: String(event.sortOrder || 0),
 		});
@@ -179,28 +236,55 @@
 		}
 	}
 
+	async function persistBudget(event) {
+		const body = new URLSearchParams({
+			requesttoken,
+			budget_json: JSON.stringify(event.budget),
+		});
+
+		const response = await fetch(event.saveBudgetUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+			},
+			body: body.toString(),
+			credentials: 'same-origin',
+		});
+
+		if (!response.ok) {
+			throw new Error('budget-save-failed');
+		}
+	}
+
 	async function saveCurrentChanges() {
 		const event = getActiveEvent();
 		if (!event) {
 			return false;
 		}
 
-		if (state.activeTab === 'overview') {
-			await persistOverview(event);
-			resetDirtyState();
-			return true;
+		// Collect all dirty tabs to save, then clear them.
+		const tabsToSave = Array.from(state.dirtyTabs);
+
+		for (const tabName of tabsToSave) {
+			try {
+				if (tabName === 'overview') {
+					await persistOverview(event);
+				} else if (tabName === 'staff') {
+					await persistStaff(event);
+				} else if (tabName === 'budget') {
+					await persistBudget(event);
+				} else if (unsavedModalMessage) {
+					unsavedModalMessage.textContent = 'Den här vyn har ännu ingen separat sparknapp.';
+				}
+			} catch (error) {
+				// Keep this tab dirty; let the unsaved modal handle the error.
+				return false;
+			}
 		}
 
-		if (state.activeTab === 'staff') {
-			await persistStaff(event);
-			resetDirtyState();
-			return true;
-		}
-
-		if (unsavedModalMessage) {
-			unsavedModalMessage.textContent = 'Den här vyn har ännu ingen separat sparknapp. Välj "Spara inte ändringar" för att fortsätta.';
-		}
-		return false;
+		// All saves succeeded — clear dirty state.
+		resetDirtyState();
+		return true;
 	}
 
 	function ensureEventOwnerRow(event) {
@@ -374,8 +458,15 @@
 	function mergeRemoteEvent(localEvent, remoteEvent) {
 		return {
 			...remoteEvent,
-			material: Array.isArray(localEvent?.material) ? localEvent.material : Array.isArray(remoteEvent.material) ? remoteEvent.material : [],
-			marketing: Array.isArray(localEvent?.marketing) ? localEvent.marketing : Array.isArray(remoteEvent.marketing) ? remoteEvent.marketing : [],
+			// Preserve locally modified fields that users edit in the UI.
+			staff: Array.isArray(localEvent?.staff) ? localEvent.staff : (Array.isArray(remoteEvent.staff) ? remoteEvent.staff : []),
+			chat: Array.isArray(localEvent?.chat) ? localEvent.chat : (Array.isArray(remoteEvent.chat) ? remoteEvent.chat : []),
+			documents: Array.isArray(localEvent?.documents) ? localEvent.documents : (Array.isArray(remoteEvent.documents) ? remoteEvent.documents : []),
+			description: localEvent?.description !== undefined ? localEvent.description : (remoteEvent.description || ''),
+			internal_notes: localEvent?.internal_notes !== undefined ? localEvent.internal_notes : (remoteEvent.internal_notes || ''),
+			material: Array.isArray(localEvent?.material) ? localEvent.material : (Array.isArray(remoteEvent.material) ? remoteEvent.material : []),
+			marketing: Array.isArray(localEvent?.marketing) ? localEvent.marketing : (Array.isArray(remoteEvent.marketing) ? remoteEvent.marketing : []),
+			budget: Array.isArray(localEvent?.budget) ? localEvent.budget : (Array.isArray(remoteEvent.budget) ? remoteEvent.budget : []),
 		};
 	}
 
@@ -503,6 +594,30 @@
 				<td>${escapeHtml(formatTimestamp(document.uploadedAt) || 'Okänt datum')}</td>
 			</tr>
 		`).join('') : '';
+
+		const budgetRows = Array.isArray(event.budget) ? event.budget.map((entry) => {
+			const isCost = entry.type === 'cost';
+			const sign = isCost ? '−' : '+';
+			const statusLabel = { planned: 'Planerad', booked: 'Bokad', received: 'Mottagen' }[entry.status] || entry.status;
+			return `
+				<tr>
+					<td>${sign} ${escapeHtml(entry.label || 'Post')}</td>
+					<td>${escapeHtml(statusLabel)}</td>
+					<td>${escapeHtml((entry.ownerUserId ? (getAvailableUser(entry.ownerUserId)?.label || entry.ownerName) : entry.ownerName) || 'Saknas')}</td>
+					<td>${(isCost ? '−' : '')}${escapeHtml(Number(entry.amount || 0).toLocaleString('sv-SE'))} kr</td>
+				</tr>
+			`;
+		}).join('') : '';
+
+		const budgetTotal = Array.isArray(event.budget) ? (() => {
+			let totalIncome = 0;
+			let totalCost = 0;
+			event.budget.forEach((entry) => {
+				const amount = Number(entry.amount || 0);
+				if (entry.type === 'income') { totalIncome += amount; } else { totalCost += amount; }
+			});
+			return { income: totalIncome, cost: totalCost, net: totalIncome - totalCost };
+		})() : { income: 0, cost: 0, net: 0 };
 
 		return `<!doctype html>
 <html lang="sv">
@@ -655,7 +770,7 @@
 				<span class="print-badge">${escapeHtml(event.location)}</span>
 				<span class="print-badge">Eventansvarig: ${escapeHtml(getPersonDisplayName(eventOwner))}</span>
 			</div>
-			<p class="print-copy">${escapeHtml(event.description || 'Ingen intern anteckning tillagd ännu.')}</p>
+			<p class="print-copy">${escapeHtml(event.internal_notes || 'Inga interna anteckningar tillagda ännu.')}</p>
 		</section>
 
 		${buildPrintTable('Översikt', buildPrintRows([
@@ -710,6 +825,22 @@
 					</table>
 				</section>
 			` : `<section class="print-section"><h2>Dokumentation</h2><p class="print-empty">Inga dokument uppladdade.</p></section>`}
+			${budgetRows ? `
+				<section class="print-section">
+					<h2>Budget</h2>
+					<table class="print-table">
+						<thead>
+							<tr><th>Post</th><th>Status</th><th>Ansvarig</th><th>Belopp</th></tr>
+						</thead>
+						<tbody>${budgetRows}</tbody>
+						<tfoot>
+							<tr><th colspan="3">Summa intäkter</th><td>${budgetTotal.income.toLocaleString('sv-SE')} kr</td></tr>
+							<tr><th colspan="3">Summa kostnader</th><td>−${budgetTotal.cost.toLocaleString('sv-SE')} kr</td></tr>
+							<tr><th colspan="3">Netto</th><td><strong>${(budgetTotal.net >= 0 ? '' : '−')}${Math.abs(budgetTotal.net).toLocaleString('sv-SE')} kr</strong></td></tr>
+						</tfoot>
+					</table>
+				</section>
+			` : `<section class="print-section"><h2>Budget</h2><p class="print-empty">Ingen budget tillagd.</p></section>`}
 		</div>
 	</div>
 </body>
@@ -795,7 +926,21 @@
 
 	function renderChat() {
 		const event = getActiveEvent();
-		if (!event || !chatBox) {
+		if (!chatBox) {
+			return;
+		}
+
+		if (!event) {
+			// Clear chat content when no event is selected to avoid showing stale data.
+			chatBox.innerHTML = '<div class="msg system">Välj ett event för att se chatten.</div>';
+			if (chatInput) {
+				chatInput.disabled = true;
+				chatInput.placeholder = 'Inget event valt';
+				chatInput.value = '';
+			}
+			if (sendBtn) {
+				sendBtn.disabled = true;
+			}
 			return;
 		}
 
@@ -849,6 +994,7 @@
 			bind('overview-link', 'link', false);
 		}
 		bind('overview-description', 'description', false);
+		bind('overview-internal-notes', 'internal_notes', false);
 	}
 
 	function renderOverview() {
@@ -883,18 +1029,18 @@
 					<div class="form-grid">
 						<div class="field full">
 							<label for="overview-title">Titel</label>
-							<input class="input" id="overview-title" type="text" name="title" value="${escapeHtml(event.title)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} required>
+							<input class="input" id="overview-title" type="text" name="title" value="${escapeHtml(event.title)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} ${isApiEvent || isDemoEvent ? '' : 'required'}>
 						</div>
 
 						<div class="field">
 							<label for="overview-date">Datum</label>
-							<input class="input" id="overview-date" type="text" name="date" value="${escapeHtml(event.date)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} required>
+							<input class="input" id="overview-date" type="text" name="date" value="${escapeHtml(event.date)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} ${isApiEvent || isDemoEvent ? '' : 'required'}>
 						</div>
 						<input type="hidden" name="sort_order" value="${escapeHtml(event.sortOrder)}">
 
 						<div class="field full">
 							<label for="overview-location">Plats</label>
-							<input class="input" id="overview-location" type="text" name="location" value="${escapeHtml(event.location)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} required>
+							<input class="input" id="overview-location" type="text" name="location" value="${escapeHtml(event.location)}" ${isDemoEvent ? 'readonly aria-readonly="true"' : lockedAttr} ${isApiEvent || isDemoEvent ? '' : 'required'}>
 						</div>
 
 						<div class="field full">
@@ -911,11 +1057,21 @@
 				</div>
 
 				<div class="section-block">
-					<h4>Intern anteckning</h4>
-					<p>Popuptexten används som fördjupning i widgeten när användaren öppnar eventet.</p>
+					<h4>API-beskrivning</h4>
+					<p>Den här texten hämtas från API:t och är låst för redigering.</p>
 					<div class="field">
-						<label for="overview-description">Popuptext</label>
-						<textarea class="textarea" id="overview-description" name="description" ${isDemoEvent ? 'readonly aria-readonly="true"' : ''}>${escapeHtml(event.description)}</textarea>
+						<label for="overview-description">Beskrivning</label>
+						<textarea class="textarea" id="overview-description" name="description" readonly aria-readonly="true">${escapeHtml(event.description)}</textarea>
+					</div>
+					<div class="small">Den här texten är låst eftersom den kommer från API:t.</div>
+				</div>
+
+				<div class="section-block">
+					<h4>Interna anteckningar</h4>
+					<p>De här anteckningarna visas i popup-fönstret när användaren klickar på eventet i widgeten.</p>
+					<div class="field">
+						<label for="overview-internal-notes">Interna anteckningar</label>
+						<textarea class="textarea" id="overview-internal-notes" name="internal_notes" ${isDemoEvent ? 'readonly aria-readonly="true"' : ''}>${escapeHtml(event.internal_notes || '')}</textarea>
 					</div>
 					<div class="small">${isDemoEvent ? 'Demoeventet kan inte sparas.' : 'Ändringarna sparas när du klickar på Spara ändringar.'}</div>
 				</div>
@@ -924,18 +1080,81 @@
 			<div class="section-block">
 				<h4>Publicering</h4>
 				<p>Ta bort eventet om det inte längre ska visas i dashboard-widgeten.</p>
-				<form action="${escapeHtml(event.deleteUrl || '#')}" method="post">
-					<input type="hidden" name="requesttoken" value="${escapeHtml(requesttoken)}">
-					<button class="btn btn-accent" type="submit" ${isDemoEvent ? 'disabled' : ''}>${isDemoEvent ? 'Demoevent kan inte tas bort' : 'Ta bort event'}</button>
-				</form>
+				<div>
+					<button class="btn btn-accent" type="button" id="deleteEventBtn" ${isDemoEvent ? 'disabled' : ''}>${isDemoEvent ? 'Demoevent kan inte tas bort' : 'Ta bort event'}</button>
+				</div>
 			</div>
 		`;
 
 		const overviewForm = document.getElementById('overviewForm');
 		if (overviewForm) {
-			overviewForm.addEventListener('submit', () => {
+			overviewForm.addEventListener('submit', async (e) => {
+				e.preventDefault();
+				if (state.submitting) return; // Guard against concurrent saves.
 				state.submitting = true;
-				resetDirtyState();
+				const submitBtn = overviewForm.querySelector('[type="submit"]');
+				if (submitBtn) {
+					submitBtn.disabled = true;
+					submitBtn.textContent = 'Sparar...';
+				}
+				try {
+					await persistOverview(event);
+					resetDirtyState();
+					state.submitting = false;
+					if (submitBtn) {
+						submitBtn.textContent = 'Sparat';
+					}
+				} catch (error) {
+					state.submitting = false;
+					if (submitBtn) {
+						submitBtn.textContent = 'Kunde inte spara';
+					}
+				} finally {
+					window.setTimeout(() => {
+						state.submitting = false;
+						if (submitBtn) {
+							submitBtn.disabled = false;
+							submitBtn.textContent = 'Spara ändringar';
+						}
+					}, 1400);
+				}
+			});
+		}
+
+		const deleteBtn = document.getElementById('deleteEventBtn');
+		if (deleteBtn) {
+			deleteBtn.addEventListener('click', async () => {
+				if (isDemoEvent) {
+					return;
+				}
+				const confirmed = window.confirm(`Är du säker på att du vill ta bort "${event.title}"?`);
+				if (!confirmed) {
+					return;
+				}
+				deleteBtn.disabled = true;
+				deleteBtn.textContent = 'Tar bort...';
+				try {
+					const formData = new URLSearchParams({ requesttoken });
+					const response = await fetch(event.deleteUrl, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+						},
+						body: formData.toString(),
+						credentials: 'same-origin',
+					});
+					if (!response.ok) {
+						throw new Error('delete-failed');
+					}
+					deleteBtn.textContent = 'Borttaget';
+					window.location.reload();
+				} catch (error) {
+					deleteBtn.textContent = 'Kunde inte ta bort';
+					window.setTimeout(() => {
+						deleteBtn.disabled = false;
+						deleteBtn.textContent = 'Ta bort event';
+					}, 2000);
+				}
 			});
 		}
 
@@ -976,8 +1195,8 @@
 			</div>
 
 			<div class="section-block">
-				<h4>Intern anteckning</h4>
-				<p>${escapeHtml(event.description || 'Ingen anteckning tillagd ännu.')}</p>
+				<h4>Interna anteckningar</h4>
+				<p>${escapeHtml(event.internal_notes || 'Inga interna anteckningar tillagda ännu.')}</p>
 			</div>
 		`;
 	}
@@ -1066,32 +1285,113 @@
 			</div>
 		`;
 
-		dynamicContent.querySelectorAll('.staff-user-select').forEach((select) => {
-			select.addEventListener('change', (e) => {
-				const index = Number(e.target.dataset.index);
-				const selectedValue = e.target.value;
-				const isExternal = selectedValue === '__external__';
-				const userId = !isExternal ? selectedValue : '';
-				const selectedUser = userId ? getAvailableUser(userId) : null;
-
-				markDirty();
-				event.staff[index].userId = userId;
-				event.staff[index].isExternal = isExternal;
-				if (selectedUser) {
-					event.staff[index].firstName = selectedUser.firstName || '';
-					event.staff[index].lastName = selectedUser.lastName || '';
-					event.staff[index].email = selectedUser.email || '';
-					event.staff[index].phone = selectedUser.phone || '';
-					event.staff[index].isExternal = false;
-				} else if (!isExternal) {
-					event.staff[index].firstName = '';
-					event.staff[index].lastName = '';
-					event.staff[index].email = '';
-					event.staff[index].phone = '';
+		// Use event delegation on the table to avoid listener leaks.
+		const staffTable = dynamicContent.querySelector('.staff-table');
+		if (staffTable) {
+			staffTable.addEventListener('change', (e) => {
+				const target = e.target;
+				if (target.classList.contains('staff-user-select')) {
+					handleStaffSelectChange(target);
 				}
-				renderStaff();
 			});
-		});
+		}
+
+		function handleStaffSelectChange(selectEl) {
+			const index = Number(selectEl.dataset.index);
+			const selectedValue = selectEl.value;
+			const isExternal = selectedValue === '__external__';
+			const userId = !isExternal ? selectedValue : '';
+			const selectedUser = userId ? getAvailableUser(userId) : null;
+
+			markDirty();
+			event.staff[index].userId = userId;
+			event.staff[index].isExternal = isExternal;
+			if (selectedUser) {
+				event.staff[index].firstName = selectedUser.firstName || '';
+				event.staff[index].lastName = selectedUser.lastName || '';
+				event.staff[index].email = selectedUser.email || '';
+				event.staff[index].phone = selectedUser.phone || '';
+				event.staff[index].isExternal = false;
+			} else if (!isExternal) {
+				event.staff[index].firstName = '';
+				event.staff[index].lastName = '';
+				event.staff[index].email = '';
+				event.staff[index].phone = '';
+			}
+
+			// Targeted DOM update instead of full re-render to preserve focus and scroll.
+			updateStaffRowDOM(index);
+		}
+
+		function updateStaffRowDOM(index) {
+			const person = event.staff[index];
+			const row = dynamicContent.querySelector(`tr:has([data-index="${index}"])`);
+			if (!row) {
+				renderStaff();
+				return;
+			}
+
+			const selectedUser = person.userId ? getAvailableUser(person.userId) : null;
+			const isManual = person.isExternal === true || (!person.userId && (person.firstName || person.lastName || person.email || person.phone));
+			const cell = row.querySelector('.staff-person-cell');
+			if (cell) {
+				if (isManual) {
+					cell.innerHTML = `
+						<select class="table-select staff-user-select" data-index="${index}">
+							<option value="">Välj person</option>
+							<option value="__external__" selected>Extern person</option>
+							${state.availableUsers.map((user) => `
+								<option value="${escapeHtml(user.id)}" ${person.userId === user.id ? 'selected' : ''}>${escapeHtml(user.label)}</option>
+							`).join('')}
+						</select>
+						<div class="staff-manual-grid">
+							<input class="table-input staff-manual-input" data-field="firstName" data-index="${index}" placeholder="Förnamn" value="${escapeHtml(person.firstName || '')}">
+							<input class="table-input staff-manual-input" data-field="lastName" data-index="${index}" placeholder="Efternamn" value="${escapeHtml(person.lastName || '')}">
+						</div>
+					`;
+				} else {
+					cell.innerHTML = `
+						<select class="table-select staff-user-select" data-index="${index}">
+							<option value="">Välj person</option>
+							<option value="__external__">Extern person</option>
+							${state.availableUsers.map((user) => `
+								<option value="${escapeHtml(user.id)}" ${person.userId === user.id ? 'selected' : ''}>${escapeHtml(user.label)}</option>
+							`).join('')}
+						</select>
+						<div class="small staff-user-meta">${escapeHtml(selectedUser?.label || '')}</div>
+					`;
+				}
+				// No need to re-attach listener — event delegation on the table handles it.
+			}
+
+			// Update email field.
+			const emailInput = row.querySelector('.staff-email-input');
+			if (emailInput) {
+				emailInput.value = isManual ? (person.email || '') : (selectedUser?.email || '');
+				emailInput.readOnly = !isManual;
+				if (isManual) {
+					emailInput.removeAttribute('readonly');
+					emailInput.removeAttribute('aria-readonly');
+				} else {
+					emailInput.setAttribute('readonly', 'true');
+					emailInput.setAttribute('aria-readonly', 'true');
+				}
+			}
+
+			// Update phone field.
+			const phoneInput = row.querySelector('.staff-phone-input');
+			if (phoneInput) {
+				phoneInput.value = isManual ? (person.phone || '') : (selectedUser?.phone || '');
+				phoneInput.readOnly = !isManual;
+				if (isManual) {
+					phoneInput.removeAttribute('readonly');
+					phoneInput.removeAttribute('aria-readonly');
+				} else {
+					phoneInput.setAttribute('readonly', 'true');
+					phoneInput.setAttribute('aria-readonly', 'true');
+				}
+			}
+		}
 
 		dynamicContent.querySelectorAll('.staff-manual-input').forEach((input) => {
 			input.addEventListener('input', (e) => {
@@ -1157,8 +1457,15 @@
 		const saveBtn = document.getElementById('saveStaffBtn');
 		if (saveBtn) {
 			saveBtn.addEventListener('click', async () => {
+				if (state.submitting) return; // Guard against concurrent saves.
+				state.submitting = true;
 				saveBtn.disabled = true;
 				saveBtn.textContent = 'Sparar...';
+				// Remove any previous error notification.
+				const prevError = dynamicContent.querySelector('.staff-save-error');
+				if (prevError) {
+					prevError.remove();
+				}
 
 				try {
 					const body = new URLSearchParams({
@@ -1181,11 +1488,60 @@
 					resetDirtyState();
 					saveBtn.textContent = 'Sparat';
 				} catch (error) {
-					saveBtn.textContent = 'Kunde inte spara';
+					// Show a persistent inline error message with retry option.
+					const errorEl = document.createElement('div');
+					errorEl.className = 'staff-save-error';
+					errorEl.setAttribute('role', 'alert');
+					errorEl.style.cssText = 'margin-top:10px;padding:10px 14px;border-radius:12px;background:#fde8e8;color:#8b2015;border:1px solid rgba(139,32,21,0.2);font-size:13px;font-weight:700;display:flex;align-items:center;gap:10px;';
+					errorEl.innerHTML = `<span>Kunde inte spara personalen. Kontrollera din anslutning och försök igen.</span><button class="btn btn-secondary" type="button" style="min-height:28px;font-size:12px;padding:0 10px;">Försök igen</button>`;
+					const panelHead = dynamicContent.querySelector('.panel-head');
+					if (panelHead) {
+						panelHead.after(errorEl);
+					}
+					const retryBtn = errorEl.querySelector('button');
+					if (retryBtn) {
+						retryBtn.addEventListener('click', async () => {
+							retryBtn.disabled = true;
+							retryBtn.textContent = 'Försöker...';
+							try {
+								const body = new URLSearchParams({
+									requesttoken,
+									staff_json: serializeStaff(event.staff),
+								});
+								const resp = await fetch(event.saveStaffUrl, {
+									method: 'POST',
+									headers: {
+										'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+									},
+									body: body.toString(),
+								});
+								if (!resp.ok) {
+									throw new Error('save_failed');
+								}
+								resetDirtyState();
+								errorEl.remove();
+								saveBtn.textContent = 'Sparat';
+								window.setTimeout(() => {
+									saveBtn.disabled = false;
+									saveBtn.textContent = 'Spara personal';
+								}, 1400);
+							} catch (err) {
+								retryBtn.disabled = false;
+								retryBtn.textContent = 'Försök igen';
+							}
+						});
+					}
 				} finally {
 					window.setTimeout(() => {
-						saveBtn.disabled = false;
-						saveBtn.textContent = 'Spara personal';
+						state.submitting = false;
+						const errEl = dynamicContent.querySelector('.staff-save-error');
+						if (errEl && saveBtn.textContent !== 'Sparat') {
+							// Keep error visible until user interacts; only auto-remove "Sparat" state.
+						}
+						if (saveBtn.textContent === 'Sparat') {
+							saveBtn.disabled = false;
+							saveBtn.textContent = 'Spara personal';
+						}
 					}, 1400);
 				}
 			});
@@ -1234,6 +1590,10 @@
 		const event = getActiveEvent();
 		if (!event || !dynamicContent) {
 			return;
+		}
+
+		if (!Array.isArray(event.material)) {
+			event.material = [];
 		}
 
 		dynamicContent.innerHTML = `
@@ -1387,6 +1747,10 @@
 			return;
 		}
 
+		if (!Array.isArray(event.marketing)) {
+			event.marketing = [];
+		}
+
 		dynamicContent.innerHTML = `
 			<div class="panel-head">
 				<div>
@@ -1505,6 +1869,341 @@
 		`;
 	}
 
+	function computeBudgetTotals(budget) {
+		let totalIncome = 0;
+		let totalCost = 0;
+		budget.forEach((entry) => {
+			const amount = Number(entry.amount || 0);
+			if (entry.type === 'income') { totalIncome += amount; } else { totalCost += amount; }
+		});
+		return { income: totalIncome, cost: totalCost, net: totalIncome - totalCost };
+	}
+
+	function renderBudget() {
+		const event = getActiveEvent();
+		if (!event || !dynamicContent) {
+			return;
+		}
+
+		if (!Array.isArray(event.budget)) {
+			event.budget = [];
+		}
+
+		const totals = computeBudgetTotals(event.budget);
+		const isDemoEvent = event.isDemo === true;
+
+		dynamicContent.innerHTML = `
+			<div class="panel-head">
+				<div>
+					<h3 class="panel-title">Budget</h3>
+					<p class="panel-copy">Planera eventets ekonomi med intäkter och kostnader. Totalsumman uppdateras live.</p>
+				</div>
+				<div class="actions">
+					<button class="btn btn-primary" type="button" id="saveBudgetBtn">Spara budget</button>
+					<button class="btn btn-accent" type="button" id="addBudgetBtn">Lägg till post</button>
+				</div>
+			</div>
+
+			<div class="section-block">
+				<h4>Budgetposter</h4>
+				<p>Lägg till intäkter och kostnader. Ange ansvarig och status för varje post.</p>
+
+				<div class="budget-totals">
+					<div class="budget-total-item">
+						<span class="budget-total-label">Intäkter</span>
+						<span class="budget-total-value budget-income">${totals.income.toLocaleString('sv-SE')} kr</span>
+					</div>
+					<div class="budget-total-item">
+						<span class="budget-total-label">Kostnader</span>
+						<span class="budget-total-value budget-cost">−${totals.cost.toLocaleString('sv-SE')} kr</span>
+					</div>
+					<div class="budget-total-item budget-net-item">
+						<span class="budget-total-label">Netto</span>
+						<span class="budget-total-value budget-net ${totals.net >= 0 ? 'positive' : 'negative'}">${(totals.net >= 0 ? '' : '−')}${Math.abs(totals.net).toLocaleString('sv-SE')} kr</span>
+					</div>
+				</div>
+
+				<div class="table-wrap">
+					<table class="staff-table">
+						<thead>
+							<tr>
+								<th>Typ</th>
+								<th>Benämning</th>
+								<th>Belopp (kr)</th>
+								<th>Status</th>
+								<th>Ansvarig</th>
+								<th>Anteckning</th>
+								<th>Ta bort</th>
+							</tr>
+						</thead>
+						<tbody>
+							${event.budget.map((entry, index) => {
+								const ownerUser = entry.ownerUserId ? getAvailableUser(entry.ownerUserId) : null;
+								const isManualOwner = !entry.ownerUserId;
+								return `
+								<tr>
+									<td>
+										<select class="table-select budget-type-select" data-index="${index}">
+											<option value="cost" ${entry.type === 'cost' ? 'selected' : ''}>Kostnad</option>
+											<option value="income" ${entry.type === 'income' ? 'selected' : ''}>Intäkt</option>
+										</select>
+									</td>
+									<td><input class="table-input budget-label-input" data-index="${index}" value="${escapeHtml(entry.label || '')}" placeholder="Benämning"></td>
+									<td><input class="table-input budget-amount-input" data-index="${index}" type="number" min="0" value="${escapeHtml(String(entry.amount || 0))}"></td>
+									<td>
+										<select class="table-select budget-status-select" data-index="${index}">
+											<option value="planned" ${entry.status === 'planned' ? 'selected' : ''}>Planerad</option>
+											<option value="booked" ${entry.status === 'booked' ? 'selected' : ''}>Bokad</option>
+											<option value="received" ${entry.status === 'received' ? 'selected' : ''}>Mottagen</option>
+										</select>
+									</td>
+									<td>
+										<div class="staff-person-cell">
+											<select class="table-select budget-owner-select" data-index="${index}">
+												<option value="">Välj person</option>
+												${state.availableUsers.map((user) => `
+													<option value="${escapeHtml(user.id)}" ${entry.ownerUserId === user.id ? 'selected' : ''}>${escapeHtml(user.label)}</option>
+												`).join('')}
+											</select>
+											${isManualOwner
+												? `<input class="table-input budget-owner-name-input" data-index="${index}" value="${escapeHtml(entry.ownerName || '')}" placeholder="Ansvarig person">`
+												: `<div class="small staff-user-meta">${escapeHtml(ownerUser?.label || '')}</div>`}
+										</div>
+									</td>
+									<td><input class="table-input budget-notes-input" data-index="${index}" value="${escapeHtml(entry.notes || '')}" placeholder="Anteckning"></td>
+									<td><button class="icon-btn remove-budget" type="button" data-index="${index}" aria-label="Ta bort budgetpost">×</button></td>
+								</tr>
+								`;
+							}).join('')}
+						</tbody>
+					</table>
+				</div>
+				${event.budget.length === 0 ? `<div class="empty-note">Inga budgetposter tillagda ännu.</div>` : ''}
+			</div>
+		`;
+
+		dynamicContent.querySelectorAll('.budget-type-select').forEach((select) => {
+			select.addEventListener('change', (e) => {
+				const index = Number(e.target.dataset.index);
+				markDirty();
+				event.budget[index].type = e.target.value;
+				renderBudget();
+			});
+		});
+
+		dynamicContent.querySelectorAll('.budget-label-input').forEach((input) => {
+			input.addEventListener('input', (e) => {
+				const index = Number(e.target.dataset.index);
+				markDirty();
+				event.budget[index].label = e.target.value;
+			});
+		});
+
+		dynamicContent.querySelectorAll('.budget-amount-input').forEach((input) => {
+			input.addEventListener('input', (e) => {
+				const index = Number(e.target.dataset.index);
+				markDirty();
+				event.budget[index].amount = Number(e.target.value) || 0;
+				renderBudgetTotals();
+			});
+		});
+
+		dynamicContent.querySelectorAll('.budget-status-select').forEach((select) => {
+			select.addEventListener('change', (e) => {
+				const index = Number(e.target.dataset.index);
+				markDirty();
+				event.budget[index].status = e.target.value;
+			});
+		});
+
+		dynamicContent.querySelectorAll('.budget-owner-select').forEach((select) => {
+			select.addEventListener('change', (e) => {
+				const index = Number(e.target.dataset.index);
+				const userId = e.target.value;
+				const ownerUser = userId ? getAvailableUser(userId) : null;
+				markDirty();
+				event.budget[index].ownerUserId = userId;
+				event.budget[index].ownerName = ownerUser?.label || '';
+				renderBudget();
+			});
+		});
+
+		dynamicContent.querySelectorAll('.budget-owner-name-input').forEach((input) => {
+			input.addEventListener('input', (e) => {
+				const index = Number(e.target.dataset.index);
+				markDirty();
+				event.budget[index].ownerName = e.target.value;
+			});
+		});
+
+		dynamicContent.querySelectorAll('.budget-notes-input').forEach((input) => {
+			input.addEventListener('input', (e) => {
+				const index = Number(e.target.dataset.index);
+				markDirty();
+				event.budget[index].notes = e.target.value;
+			});
+		});
+
+		dynamicContent.querySelectorAll('.remove-budget').forEach((btn) => {
+			btn.addEventListener('click', (e) => {
+				const index = Number(e.currentTarget.dataset.index);
+				markDirty();
+				event.budget.splice(index, 1);
+				renderBudget();
+			});
+		});
+
+		const addBtn = document.getElementById('addBudgetBtn');
+		if (addBtn) {
+			addBtn.addEventListener('click', () => {
+				markDirty();
+				event.budget.push({ label: '', type: 'cost', amount: 0, status: 'planned', ownerUserId: '', ownerName: '', notes: '' });
+				renderBudget();
+			});
+		}
+
+		const saveBtn = document.getElementById('saveBudgetBtn');
+		if (saveBtn) {
+			saveBtn.addEventListener('click', async () => {
+				if (state.submitting) return; // Guard against concurrent saves.
+				state.submitting = true;
+				saveBtn.disabled = true;
+				saveBtn.textContent = 'Sparar...';
+				const prevError = dynamicContent.querySelector('.budget-save-error');
+				if (prevError) {
+					prevError.remove();
+				}
+
+				try {
+					await persistBudget(event);
+					resetDirtyState();
+					saveBtn.textContent = 'Sparat';
+				} catch (error) {
+					const errorEl = document.createElement('div');
+					errorEl.className = 'budget-save-error';
+					errorEl.setAttribute('role', 'alert');
+					errorEl.style.cssText = 'margin-top:10px;padding:10px 14px;border-radius:12px;background:#fde8e8;color:#8b2015;border:1px solid rgba(139,32,21,0.2);font-size:13px;font-weight:700;display:flex;align-items:center;gap:10px;';
+					errorEl.innerHTML = `<span>Kunde inte spara budgeten. Kontrollera din anslutning och försök igen.</span><button class="btn btn-secondary" type="button" style="min-height:28px;font-size:12px;padding:0 10px;">Försök igen</button>`;
+					const panelHead = dynamicContent.querySelector('.panel-head');
+					if (panelHead) {
+						panelHead.after(errorEl);
+					}
+					const retryBtn = errorEl.querySelector('button');
+					if (retryBtn) {
+						retryBtn.addEventListener('click', async () => {
+							retryBtn.disabled = true;
+							retryBtn.textContent = 'Försöker...';
+							try {
+								await persistBudget(event);
+								resetDirtyState();
+								errorEl.remove();
+								saveBtn.textContent = 'Sparat';
+								window.setTimeout(() => {
+									saveBtn.disabled = false;
+									saveBtn.textContent = 'Spara budget';
+								}, 1400);
+							} catch (err) {
+								retryBtn.disabled = false;
+								retryBtn.textContent = 'Försök igen';
+							}
+						});
+					}
+				} finally {
+					window.setTimeout(() => {
+						state.submitting = false;
+						if (saveBtn.textContent === 'Sparat') {
+							saveBtn.disabled = false;
+							saveBtn.textContent = 'Spara budget';
+						}
+					}, 1400);
+				}
+			});
+		}
+	}
+
+	function renderBudgetTotals() {
+		const event = getActiveEvent();
+		if (!event || !dynamicContent) {
+			return;
+		}
+
+		const totals = computeBudgetTotals(Array.isArray(event.budget) ? event.budget : []);
+		const totalsEl = dynamicContent.querySelector('.budget-totals');
+		if (!totalsEl) {
+			return;
+		}
+
+		const incomeEl = totalsEl.querySelector('.budget-income');
+		const costEl = totalsEl.querySelector('.budget-cost');
+		const netEl = totalsEl.querySelector('.budget-net');
+
+		if (incomeEl) { incomeEl.textContent = `${totals.income.toLocaleString('sv-SE')} kr`; }
+		if (costEl) { costEl.textContent = `−${totals.cost.toLocaleString('sv-SE')} kr`; }
+		if (netEl) {
+			netEl.textContent = `${(totals.net >= 0 ? '' : '−')}${Math.abs(totals.net).toLocaleString('sv-SE')} kr`;
+			netEl.classList.toggle('positive', totals.net >= 0);
+			netEl.classList.toggle('negative', totals.net < 0);
+		}
+	}
+
+	function renderBudgetSummary() {
+		const event = getActiveEvent();
+		if (!event || !dynamicContent) {
+			return;
+		}
+
+		const budget = Array.isArray(event.budget) ? event.budget : [];
+		const totals = computeBudgetTotals(budget);
+
+		dynamicContent.innerHTML = `
+			<div class="panel-head">
+				<div>
+					<h3 class="panel-title">Budget</h3>
+					<p class="panel-copy">Sammanställning av eventets ekonomi.</p>
+				</div>
+			</div>
+
+			<div class="budget-totals">
+				<div class="budget-total-item">
+					<span class="budget-total-label">Intäkter</span>
+					<span class="budget-total-value budget-income">${totals.income.toLocaleString('sv-SE')} kr</span>
+				</div>
+				<div class="budget-total-item">
+					<span class="budget-total-label">Kostnader</span>
+					<span class="budget-total-value budget-cost">−${totals.cost.toLocaleString('sv-SE')} kr</span>
+				</div>
+				<div class="budget-total-item budget-net-item">
+					<span class="budget-total-label">Netto</span>
+					<span class="budget-total-value budget-net ${totals.net >= 0 ? 'positive' : 'negative'}">${(totals.net >= 0 ? '' : '−')}${Math.abs(totals.net).toLocaleString('sv-SE')} kr</span>
+				</div>
+			</div>
+
+			<div class="summary-stack">
+				${budget.map((entry) => {
+					const isCost = entry.type === 'cost';
+					const sign = isCost ? '−' : '+';
+					const statusLabel = { planned: 'Planerad', booked: 'Bokad', received: 'Mottagen' }[entry.status] || entry.status;
+					const ownerName = (entry.ownerUserId ? (getAvailableUser(entry.ownerUserId)?.label || entry.ownerName) : entry.ownerName) || 'Saknas';
+					return `
+						<div class="section-block summary-card">
+							<div class="summary-badge-row">
+								<span class="summary-status ${isCost ? 'cost' : 'income'}">${isCost ? 'Kostnad' : 'Intäkt'}</span>
+								<span class="summary-status ${entry.status}">${statusLabel}</span>
+							</div>
+							<div class="summary-list">
+								<div><span>Benämning</span><strong>${escapeHtml(entry.label || 'Post')}</strong></div>
+								<div><span>Belopp</span><strong>${sign} ${Number(entry.amount || 0).toLocaleString('sv-SE')} kr</strong></div>
+								<div><span>Ansvarig</span><strong>${escapeHtml(ownerName)}</strong></div>
+								${entry.notes ? `<div><span>Anteckning</span><strong>${escapeHtml(entry.notes)}</strong></div>` : ''}
+							</div>
+						</div>
+					`;
+				}).join('')}
+				${budget.length === 0 ? '<div class="empty-note">Ingen budget tillagd ännu.</div>' : ''}
+			</div>
+		`;
+	}
+
 	async function uploadDocument(event, file) {
 		if (!event.uploadDocumentUrl || event.isDemo === true) {
 			throw new Error('document-upload-disabled');
@@ -1567,7 +2266,6 @@
 			: 'Ladda upp dokument kopplade till eventet, till exempel körschema, avtal, PDF:er och bildmaterial.';
 
 		dynamicContent.innerHTML = `
-			${getDemoOverlayMarkup(event)}
 			<div class="panel-head">
 				<div>
 					<h3 class="panel-title">Dokument</h3>
@@ -1638,7 +2336,15 @@
 	}
 
 	function renderActiveTab() {
-		tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === state.activeTab));
+		const tabList = root.querySelector('[role="tablist"]');
+		tabs.forEach((tab) => {
+			const isActive = tab.dataset.tab === state.activeTab;
+			tab.classList.toggle('active', isActive);
+			tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+			if (isActive && tabList) {
+				tabList.setAttribute('aria-activedescendant', tab.id || '');
+			}
+		});
 
 		if (!getActiveEvent() && dynamicContent) {
 			dynamicContent.innerHTML = `
@@ -1663,6 +2369,9 @@
 			if (state.activeTab === 'marketing') {
 				renderMarketingSummary();
 			}
+			if (state.activeTab === 'budget') {
+				renderBudgetSummary();
+			}
 			if (state.activeTab === 'documents') {
 				renderDocuments();
 			}
@@ -1680,6 +2389,9 @@
 		}
 		if (state.activeTab === 'marketing') {
 			renderMarketing();
+		}
+		if (state.activeTab === 'budget') {
+			renderBudget();
 		}
 		if (state.activeTab === 'documents') {
 			renderDocuments();
@@ -1718,6 +2430,11 @@
 
 	async function pollLiveState() {
 		if (viewMode !== 'eventpersonal' || !stateUrl) {
+			return;
+		}
+
+		// Skip polling merge when user has unsaved local edits to avoid overwriting them.
+		if (state.dirty) {
 			return;
 		}
 
@@ -1763,6 +2480,32 @@
 		});
 	});
 
+	// Keyboard navigation for tabs (ArrowLeft / ArrowRight)
+	const tabList = root.querySelector('[role="tablist"]');
+	if (tabList) {
+		tabList.addEventListener('keydown', (e) => {
+			const tabArray = Array.from(tabs);
+			const currentIndex = tabArray.indexOf(e.target);
+			if (currentIndex === -1) {
+				return;
+			}
+			let newIndex = -1;
+			if (e.key === 'ArrowRight') {
+				newIndex = (currentIndex + 1) % tabArray.length;
+			} else if (e.key === 'ArrowLeft') {
+				newIndex = (currentIndex - 1 + tabArray.length) % tabArray.length;
+			} else if (e.key === 'Home') {
+				newIndex = 0;
+			} else if (e.key === 'End') {
+				newIndex = tabArray.length - 1;
+			}
+			if (newIndex >= 0) {
+				e.preventDefault();
+				tabArray[newIndex].focus();
+			}
+		});
+	}
+
 	eventButtons.forEach((button) => {
 		button.addEventListener('click', async () => {
 			if (button.dataset.eventId === String(state.activeEventId)) {
@@ -1788,13 +2531,13 @@
 		}
 
 		const body = new URLSearchParams({
+			requesttoken,
 			chat_json: JSON.stringify(event.chat),
 		});
 
 		const response = await fetch(event.saveChatUrl, {
 			method: 'POST',
 			headers: {
-				requesttoken,
 				'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
 			},
 			body: body.toString(),
@@ -1816,6 +2559,9 @@
 			window.alert('Chatten är låst i demoeventet.');
 			return;
 		}
+		if (state.chatSending) {
+			return; // Prevent double-send.
+		}
 
 		const message = {
 			type: 'message',
@@ -1829,13 +2575,48 @@
 		renderChat();
 		chatInput.value = '';
 		chatInput.focus();
+		state.chatSending = true;
+		if (sendBtn) {
+			sendBtn.disabled = true;
+		}
+		if (chatInput) {
+			chatInput.disabled = true;
+		}
 
 		try {
 			await persistChat(event);
 		} catch (error) {
 			event.chat = previousChat;
 			renderChat();
-			window.alert('Kunde inte spara chatmeddelandet. Försök igen.');
+			// Restore the failed message text so the user can retry without retyping.
+			if (chatInput) {
+				chatInput.value = text;
+			}
+			// Show inline error in chat instead of alert.
+			let errorNotice = chatBox.querySelector('.chat-send-error');
+			if (!errorNotice) {
+				errorNotice = document.createElement('div');
+				errorNotice.className = 'msg system chat-send-error';
+				errorNotice.setAttribute('role', 'alert');
+				chatBox.appendChild(errorNotice);
+			}
+			errorNotice.textContent = 'Kunde inte spara meddelandet. Försök igen.';
+			chatBox.scrollTop = chatBox.scrollHeight;
+		} finally {
+			state.chatSending = false;
+			if (sendBtn) {
+				sendBtn.disabled = false;
+			}
+			if (chatInput) {
+				chatInput.disabled = false;
+			}
+			// Auto-remove error notice after a delay.
+			window.setTimeout(() => {
+				const errEl = chatBox.querySelector('.chat-send-error');
+				if (errEl) {
+					errEl.remove();
+				}
+			}, 5000);
 		}
 	}
 
@@ -1915,7 +2696,7 @@
 	});
 
 	window.addEventListener('beforeunload', (event) => {
-		if (!state.dirty || state.submitting) {
+		if (!state.dirty) {
 			return;
 		}
 

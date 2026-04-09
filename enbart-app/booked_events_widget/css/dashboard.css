@@ -123,10 +123,11 @@
 .bew-list {
 	list-style: none;
 	margin: 0;
-	padding: 0 4px 8px 0;
+	padding: 0 8px 8px 8px;
 	display: grid;
 	gap: 8px;
 	max-width: 100%;
+	width: 100%;
 	overflow: auto;
 	flex: 1 1 auto;
 	min-height: 0;
@@ -208,13 +209,25 @@
 
 .bew-dialog__panel {
 	position: absolute;
-	left: 16px;
-	right: 16px;
+	left: 8px;
+	right: 8px;
 	top: 16px;
-	padding: 18px 18px 16px;
+	padding: 22px 24px 20px;
 	border-radius: 18px;
 	background: rgba(255, 255, 255, 0.97);
 	box-shadow: 0 24px 48px rgba(6, 35, 54, 0.24);
+	max-width: 800px;
+	margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+	.bew-dialog__panel {
+		left: 24px;
+		right: 24px;
+		top: 24px;
+		padding: 26px 28px 24px;
+		max-width: 800px;
+	}
 }
 
 .bew-dialog__close {
@@ -308,5 +321,28 @@
 
 	.bew-event__date {
 		text-align: left;
+	}
+
+	.bew-dialog__panel {
+		left: 4px;
+		right: 4px;
+		top: 8px;
+		padding: 18px 16px 16px;
+		max-width: 100%;
+	}
+}
+
+@media (min-width: 1024px) {
+	.bew-list {
+		padding: 0 12px 8px 12px;
+	}
+
+	.bew-event {
+		padding: 12px 14px;
+	}
+
+	.bew-dialog__panel {
+		padding: 28px 32px 26px;
+		max-width: 850px;
 	}
 }

@@ -75,12 +75,13 @@ class PageController extends Controller {
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function create(string $title, string $date, string $location, string $description = '', string $link = '', int $sort_order = 0): RedirectResponse {
+	public function create(string $title, string $date, string $location, string $description = '', string $internal_notes = '', string $link = '', int $sort_order = 0): RedirectResponse {
 		$this->eventService->createEvent(
 			trim($title),
 			$date,
 			trim($location),
 			trim($description),
+			trim($internal_notes),
 			trim($link),
 			$sort_order,
 		);
@@ -90,13 +91,14 @@ class PageController extends Controller {
 
 	#[NoAdminRequired]
 	#[NoCSRFRequired]
-	public function update(int $id, string $title, string $date, string $location, string $description = '', string $link = '', int $sort_order = 0): RedirectResponse {
+	public function update(int $id, string $title, string $date, string $location, string $description = '', string $internal_notes = '', string $link = '', int $sort_order = 0): RedirectResponse {
 		$this->eventService->updateEvent(
 			$id,
 			trim($title),
 			$date,
 			trim($location),
 			trim($description),
+			trim($internal_notes),
 			trim($link),
 			$sort_order,
 		);
@@ -134,6 +136,22 @@ class PageController extends Controller {
 		);
 
 		return $this->redirectToIndex();
+	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function saveBudget(int $id, string $budget_json = '[]'): JSONResponse {
+		$budget = json_decode($budget_json, true);
+		if (!is_array($budget)) {
+			$budget = [];
+		}
+
+		$this->eventService->saveBudget(
+			$id,
+			array_values(array_filter($budget, static fn ($row): bool => is_array($row))),
+		);
+
+		return new JSONResponse(['ok' => true]);
 	}
 
 	#[NoAdminRequired]
@@ -210,6 +228,10 @@ class PageController extends Controller {
 			);
 			$event['saveChatUrl'] = $this->urlGenerator->linkToRoute(
 				'booked_events_widget.page.saveChat',
+				['id' => (int)$event['id']],
+			);
+			$event['saveBudgetUrl'] = $this->urlGenerator->linkToRoute(
+				'booked_events_widget.page.saveBudget',
 				['id' => (int)$event['id']],
 			);
 			$event['uploadDocumentUrl'] = $this->urlGenerator->linkToRoute(
