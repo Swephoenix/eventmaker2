@@ -64,7 +64,7 @@ for index, item in enumerate(payload, start=1):
         "location": location,
         "description": str(item.get("description", "")).strip(),
         "link": str(item.get("link", "")).strip(),
-        "sort_order": int(item.get("sort_order", index * 10)),
+        "sort_order": int(item.get("sort_order", 0)),
         "source": "api",
     })
 

@@ -39,6 +39,7 @@ $clientEvents = array_map(static function (array $event): array {
 		'updateUrl' => (string)$event['updateUrl'],
 		'saveStaffUrl' => (string)$event['saveStaffUrl'],
 		'saveChatUrl' => (string)$event['saveChatUrl'],
+		'saveBudgetUrl' => (string)($event['saveBudgetUrl'] ?? ''),
 		'uploadDocumentUrl' => (string)($event['uploadDocumentUrl'] ?? ''),
 		'deleteUrl' => (string)$event['deleteUrl'],
 		'staff' => array_values(array_map(static function (array $person): array {
@@ -74,6 +75,17 @@ $clientEvents = array_map(static function (array $event): array {
 				'createdAt' => (string)($message['createdAt'] ?? ''),
 		];
 	}, (array)($event['chat'] ?? []))),
+		'budget' => array_values(array_map(static function (array $entry): array {
+			return [
+				'label' => (string)($entry['label'] ?? ''),
+				'type' => (string)($entry['type'] ?? 'cost'),
+				'amount' => (int)($entry['amount'] ?? 0),
+				'status' => (string)($entry['status'] ?? 'planned'),
+				'ownerUserId' => (string)($entry['ownerUserId'] ?? ''),
+				'ownerName' => (string)($entry['ownerName'] ?? ''),
+				'notes' => (string)($entry['notes'] ?? ''),
+			];
+		}, (array)($event['budget'] ?? []))),
 	];
 }, $_['events']);
 
@@ -116,6 +128,14 @@ if ((string)$_['viewMode'] === 'admin') {
 			['type' => 'message', 'text' => 'Vi behöver dubbelkolla att montern får både el och två ståbord.', 'senderLabel' => 'Monica Lind', 'senderUserId' => '', 'createdAt' => '2026-03-18T08:15:00Z'],
 			['type' => 'message', 'text' => 'Jag tar med skärmen och presentationsloopen på USB också.', 'senderLabel' => 'Johan Berg', 'senderUserId' => '', 'createdAt' => '2026-03-18T09:02:00Z'],
 		],
+		'budget' => [
+			['label' => 'Monterhyra', 'type' => 'cost', 'amount' => 15000, 'status' => 'booked', 'ownerUserId' => '', 'ownerName' => 'Monica Lind', 'notes' => 'Faktura betald 2026-02-01.'],
+			['label' => 'Resor och boende', 'type' => 'cost', 'amount' => 8500, 'status' => 'planned', 'ownerUserId' => '', 'ownerName' => 'Emil Sund', 'notes' => 'Hotell 2 nätter + tåg.'],
+			['label' => 'Trycksaker (flyers, rollup)', 'type' => 'cost', 'amount' => 4200, 'status' => 'booked', 'ownerUserId' => '', 'ownerName' => 'Sara Holm', 'notes' => 'Beställt från tryckeri. Levereras tisdag.'],
+			['label' => 'Profiltröjor och namnskyltar', 'type' => 'cost', 'amount' => 3300, 'status' => 'planned', 'ownerUserId' => '', 'ownerName' => 'Monica Lind', 'notes' => 'Väntar på storlekar från alla i teamet.'],
+			['label' => 'Sponsring från lokalt företag', 'type' => 'income', 'amount' => 10000, 'status' => 'received', 'ownerUserId' => '', 'ownerName' => 'Johan Berg', 'notes' => 'Betalat 2026-02-15.'],
+			['label' => 'Medlemsinsamling', 'type' => 'income', 'amount' => 5000, 'status' => 'planned', 'ownerUserId' => '', 'ownerName' => 'Monica Lind', 'notes' => 'Pågår fram till mässan.'],
+		],
 	];
 }
 ?>
@@ -132,7 +152,7 @@ if ((string)$_['viewMode'] === 'admin') {
 	<section class="layout">
 		<aside class="sidebar">
 			<div class="sidebar-head">
-				<h2 class="sidebar-title">Booked events</h2>
+				<h2 class="sidebar-title">Bokade events</h2>
 				<p class="sidebar-subtitle">Välj ett event i listan. Kortet till höger visar sammanfattning först och redigeringsytor direkt under.</p>
 				<?php if ((string)$_['viewMode'] === 'eventpersonal' && $_['currentUser'] !== null): ?>
 					<label class="sidebar-filter">
@@ -181,16 +201,17 @@ if ((string)$_['viewMode'] === 'admin') {
 			</div>
 
 			<div class="main-body">
-				<div class="tabbar">
-					<button class="tab-btn active" type="button" data-tab="overview">Översikt</button>
-					<button class="tab-btn" type="button" data-tab="staff">Personal</button>
-					<button class="tab-btn" type="button" data-tab="material">Material</button>
-					<button class="tab-btn" type="button" data-tab="marketing">Marknadsföring</button>
-					<button class="tab-btn" type="button" data-tab="documents">Dokument</button>
+				<div class="tabbar" role="tablist" aria-label="Eventflikar">
+					<button class="tab-btn active" type="button" data-tab="overview" role="tab" aria-selected="true" aria-controls="dynamicContent">Översikt</button>
+					<button class="tab-btn" type="button" data-tab="staff" role="tab" aria-selected="false" aria-controls="dynamicContent">Personal</button>
+					<button class="tab-btn" type="button" data-tab="material" role="tab" aria-selected="false" aria-controls="dynamicContent">Material</button>
+					<button class="tab-btn" type="button" data-tab="marketing" role="tab" aria-selected="false" aria-controls="dynamicContent">Marknadsföring</button>
+					<button class="tab-btn" type="button" data-tab="budget" role="tab" aria-selected="false" aria-controls="dynamicContent">Budget</button>
+					<button class="tab-btn" type="button" data-tab="documents" role="tab" aria-selected="false" aria-controls="dynamicContent">Dokument</button>
 				</div>
 
 				<div class="content-grid">
-					<section class="panel editor-panel">
+					<section class="panel editor-panel" role="tabpanel" id="dynamicContent" aria-labelledby="mainTitle">
 						<div id="dynamicContent"></div>
 					</section>
 
@@ -214,7 +235,7 @@ if ((string)$_['viewMode'] === 'admin') {
 
 	<div class="unsaved-modal" id="unsavedModal" hidden>
 		<div class="unsaved-modal__backdrop"></div>
-		<div class="unsaved-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="unsavedModalTitle">
+		<div class="unsaved-modal__dialog" role="alertdialog" aria-modal="true" aria-labelledby="unsavedModalTitle" aria-describedby="unsavedModalMessage">
 			<h3 id="unsavedModalTitle">Osparade ändringar</h3>
 			<p id="unsavedModalMessage">Du har osparade ändringar i den här vyn.</p>
 			<div class="unsaved-modal__actions">

@@ -18,6 +18,11 @@ class EventService {
 		}
 
 		usort($events, static function (array $left, array $right): int {
+			$dateComparison = ((string)$left['sort_date']) <=> ((string)$right['sort_date']);
+			if ($dateComparison !== 0) {
+				return $dateComparison;
+			}
+
 			$sortComparison = ((int)$left['sort_order']) <=> ((int)$right['sort_order']);
 			if ($sortComparison !== 0) {
 				return $sortComparison;
@@ -530,8 +535,35 @@ class EventService {
 			'budget' => $this->normalizeBudget((array)($event['budget'] ?? [])),
 			'is_api' => $this->isApiEvent($event),
 			'is_past' => $this->isPastEvent($month, $day),
-			'sort_order' => (int)($event['sort_order'] ?? (($index + 1) * 10)),
+			'sort_date' => $this->getEventSortKey($month, $day),
+			'sort_order' => (int)($event['sort_order'] ?: 100),
 		];
+	}
+
+	private function getEventSortKey(string $month, string $day): string {
+		$monthMap = [
+			'januari' => '01',
+			'februari' => '02',
+			'mars' => '03',
+			'april' => '04',
+			'maj' => '05',
+			'juni' => '06',
+			'juli' => '07',
+			'augusti' => '08',
+			'september' => '09',
+			'oktober' => '10',
+			'november' => '11',
+			'december' => '12',
+		];
+
+		$monthNumber = $monthMap[mb_strtolower($month)] ?? '99';
+
+		$dayNumber = '99';
+		if (preg_match('/(\d{1,2})/', $day, $matches)) {
+			$dayNumber = sprintf('%02d', (int)$matches[1]);
+		}
+
+		return $monthNumber . $dayNumber;
 	}
 
 	/**

@@ -23,7 +23,7 @@ class BookedEventsWidget implements IWidget {
 	}
 
 	public function getTitle(): string {
-		return $this->l10n->t('Booked events');
+		return $this->l10n->t('Bokade events');
 	}
 
 	public function getOrder(): int {

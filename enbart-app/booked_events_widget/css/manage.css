@@ -752,7 +752,7 @@
 
 .bew-manage .table-wrap {
 	overflow-x: auto;
-	overflow-y: hidden;
+	overflow-y: visible;
 	border: 1px solid var(--line);
 	border-radius: 18px;
 	background: #f8fbfe;
@@ -1090,6 +1090,94 @@
 	font-weight: 700;
 	border: 1px solid rgba(38, 77, 113, 0.14);
 	font-size: 14px;
+}
+
+.bew-manage .budget-totals {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 14px;
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	background: #f0f6fb;
+	margin-bottom: 14px;
+}
+
+.bew-manage .budget-total-item {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 16px;
+	border-radius: 12px;
+	background: #ffffff;
+	border: 1px solid var(--line);
+	min-width: 140px;
+	flex: 1;
+}
+
+.bew-manage .budget-total-label {
+	font-size: 10px;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--muted);
+}
+
+.bew-manage .budget-total-value {
+	font-size: 18px;
+	font-weight: 900;
+	line-height: 1.1;
+}
+
+.bew-manage .budget-income {
+	color: #2e8b57;
+}
+
+.bew-manage .budget-cost {
+	color: #c0392b;
+}
+
+.bew-manage .budget-net-item {
+	border-width: 2px;
+}
+
+.bew-manage .budget-net.positive {
+	border-color: rgba(46, 139, 87, 0.35);
+	background: rgba(46, 139, 87, 0.06);
+}
+
+.bew-manage .budget-net.negative {
+	border-color: rgba(192, 57, 43, 0.35);
+	background: rgba(192, 57, 43, 0.06);
+}
+
+.bew-manage .budget-net {
+	color: #2e8b57;
+}
+
+.bew-manage .budget-net.negative {
+	color: #c0392b;
+}
+
+.bew-manage .summary-status.cost {
+	background: rgba(192, 57, 43, 0.16);
+	color: #8b2015;
+}
+
+.bew-manage .summary-status.income {
+	background: rgba(46, 139, 87, 0.16);
+	color: #1a6b3c;
+}
+
+.bew-manage .summary-status.planned {
+	background: rgba(240, 124, 23, 0.16);
+	color: #974809;
+}
+
+.bew-manage .summary-status.booked,
+.bew-manage .summary-status.received {
+	background: rgba(46, 139, 87, 0.16);
+	color: #1a6b3c;
 }
 
 .bew-manage .marketing-map-block {
