@@ -46,6 +46,7 @@
 	const requesttoken = root.dataset.requesttoken || '';
 	const stateUrl = root.dataset.stateUrl || '';
 	const viewMode = root.dataset.viewMode || 'admin';
+	const eventAccentIndexes = new Map(eventButtons.map((button, index) => [String(button.dataset.eventId || ''), index]));
 	let printFrame = null;
 
 	function escapeHtml(str) {
@@ -421,17 +422,19 @@
 	}
 
 	function getEventAccent(eventId) {
-		const palette = [
-			{ card: '#d9e5ff', border: '#416fcf', date: '#bed3ff', month: '#244d9a' },
-			{ card: '#d7f1e3', border: '#2f9360', date: '#b7e4cb', month: '#1f6a45' },
-			{ card: '#ffe4c7', border: '#d67a1c', date: '#ffd0a1', month: '#9a4f05' },
-			{ card: '#eadcff', border: '#7b4fc9', date: '#dac2ff', month: '#553093' },
-			{ card: '#d8f0f4', border: '#2f8a9a', date: '#bae3ea', month: '#1d6170' },
-			{ card: '#ffd9e4', border: '#c4517a', date: '#ffc0d2', month: '#8f2f55' },
-		];
-		const numericId = Number(eventId);
-		const index = Number.isNaN(numericId) ? 0 : Math.abs(numericId) % palette.length;
-		return palette[index];
+		const index = eventAccentIndexes.get(String(eventId)) ?? 0;
+		const hue = Math.round((210 + index * 137.508) % 360);
+		const saturation = 66 + ((index * 23) % 12);
+		const cardLightness = 90 + ((index * 5) % 4);
+		const dateLightness = 79 + ((index * 7) % 6);
+		const borderLightness = 37 + ((index * 11) % 10);
+		const monthLightness = 26 + ((index * 13) % 9);
+		return {
+			card: `hsl(${hue} ${saturation}% ${cardLightness}%)`,
+			border: `hsl(${hue} ${Math.max(52, saturation - 8)}% ${borderLightness}%)`,
+			date: `hsl(${hue} ${saturation}% ${dateLightness}%)`,
+			month: `hsl(${hue} ${Math.max(54, saturation - 4)}% ${monthLightness}%)`,
+		};
 	}
 
 	function applyActiveEventAccent() {
