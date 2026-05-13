@@ -35,10 +35,12 @@ class EventService {
 	}
 
 	/**
-	 * @return list<array<string, string>>
+	 * @return list<array<string, bool|int|string>>
 	 */
 	public function getEvents(): array {
-		return array_map(static fn (array $event): array => [
+		$events = $this->getEventsWithIds();
+
+		return array_map(static fn (array $event, int $index): array => [
 			'title' => (string)$event['title'],
 			'date' => (string)$event['date'],
 			'location' => (string)$event['location'],
@@ -46,7 +48,8 @@ class EventService {
 			'internal_notes' => (string)$event['internal_notes'],
 			'link' => (string)$event['link'],
 			'isPast' => (bool)$event['is_past'],
-		], $this->getEventsWithIds());
+			'accentIndex' => $index,
+		], $events, array_keys($events));
 	}
 
 	public function hasAnyEvents(): bool {

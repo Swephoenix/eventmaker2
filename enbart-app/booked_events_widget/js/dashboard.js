@@ -14,9 +14,26 @@
 		.replace(/"/g, '&quot;')
 		.replace(/'/g, '&#39;')
 
+	const getEventAccent = (event, fallbackIndex) => {
+		const index = Number.isFinite(Number(event?.accentIndex)) ? Number(event.accentIndex) : fallbackIndex
+		const hue = Math.round((210 + index * 137.508) % 360)
+		const saturation = 66 + ((index * 23) % 12)
+		const cardLightness = 90 + ((index * 5) % 4)
+		const dateLightness = 79 + ((index * 7) % 6)
+		const borderLightness = 37 + ((index * 11) % 10)
+		const monthLightness = 26 + ((index * 13) % 9)
+
+		return {
+			card: `hsl(${hue} ${saturation}% ${cardLightness}%)`,
+			border: `hsl(${hue} ${Math.max(52, saturation - 8)}% ${borderLightness}%)`,
+			date: `hsl(${hue} ${saturation}% ${dateLightness}%)`,
+			month: `hsl(${hue} ${Math.max(54, saturation - 4)}% ${monthLightness}%)`,
+		}
+	}
+
 	const renderEvent = (event, index) => `
 		<li>
-			<button class="bew-event" type="button" data-event-index="${index}">
+			<button class="bew-event" type="button" data-event-index="${index}" style="${Object.entries(getEventAccent(event, index)).map(([key, value]) => `--bew-event-${key}: ${value}`).join('; ')}">
 				<div class="bew-event__date">${escapeHtml(event.date)}</div>
 				<div class="bew-event__content">
 					<div class="bew-event__title">${escapeHtml(event.title)}</div>

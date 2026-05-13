@@ -146,9 +146,9 @@
 	align-items: center;
 	width: 100%;
 	padding: 10px;
-	border: 1px solid rgba(140, 198, 233, 0.38);
+	border: 1px solid color-mix(in srgb, var(--bew-event-border, #416fcf) 42%, #0f2940 8%);
 	border-radius: 14px;
-	background: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(232, 244, 252, 0.76));
+	background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), var(--bew-event-card, #d9e5ff));
 	box-shadow: 0 10px 22px rgba(5, 41, 66, 0.1);
 	max-width: 100%;
 	overflow: hidden;
@@ -158,15 +158,15 @@
 
 .bew-event:hover,
 .bew-event:focus {
-	border-color: rgba(242, 117, 35, 0.5);
-	box-shadow: 0 12px 28px rgba(194, 92, 22, 0.18);
+	border-color: var(--bew-event-border, #416fcf);
+	box-shadow: 0 12px 28px color-mix(in srgb, var(--bew-event-border, #416fcf) 22%, transparent);
 }
 
 .bew-event__date {
 	font-size: 12px;
 	font-weight: 700;
-	color: #45657d;
-	background: rgba(17, 128, 196, 0.08);
+	color: var(--bew-event-month, #244d9a);
+	background: var(--bew-event-date, #bed3ff);
 	border-radius: 12px;
 	padding: 10px 12px;
 	line-height: 1.35;
