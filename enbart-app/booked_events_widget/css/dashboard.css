@@ -1,3 +1,8 @@
+.icon-booked-events-widget {
+	background-image: url('../img/logo.svg');
+	background-size: 20px 20px;
+}
+
 .bew-widget {
 	padding: 6px 0 0;
 	max-width: 100%;

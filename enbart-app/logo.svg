@@ -1,0 +1,28 @@
+<svg width="200" height="200" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kalender / Planeringsblock -->
+  <rect x="20" y="25" width="50" height="55" rx="4" fill="#FFFFFF" stroke="#333" stroke-width="2"/>
+  <rect x="20" y="25" width="50" height="12" rx="4" fill="#6200EE" /> <!-- Lila topp -->
+  
+  <!-- Checklist-rader -->
+  <line x1="28" y1="48" x2="62" y2="48" stroke="#FF0266" stroke-width="3" stroke-linecap="round" />
+  <line x1="28" y1="58" x2="55" y2="58" stroke="#03DAC6" stroke-width="3" stroke-linecap="round" />
+  <line x1="28" y1="68" x2="45" y2="68" stroke="#FFDE03" stroke-width="3" stroke-linecap="round" />
+
+  <!-- Ballonger -->
+  <!-- Rosa ballong -->
+  <circle cx="75" cy="35" r="12" fill="#FF0266" />
+  <path d="M75 47 Q 75 55 70 60" stroke="#333" stroke-width="1.5" fill="none" />
+  
+  <!-- Turkos ballong -->
+  <circle cx="82" cy="55" r="10" fill="#03DAC6" />
+  <path d="M82 65 Q 82 72 87 77" stroke="#333" stroke-width="1.5" fill="none" />
+
+  <!-- Konfetti-detaljer -->
+  <rect x="15" y="15" width="4" height="4" rx="1" fill="#FFDE03" transform="rotate(15)" />
+  <circle cx="85" cy="15" r="3" fill="#6200EE" />
+  <rect x="10" y="50" width="5" height="2" fill="#FF0266" transform="rotate(-20)" />
+  <path d="M50 10 L53 16 L47 16 Z" fill="#03DAC6" transform="rotate(10)" />
+
+  <!-- Stjärna (Event-finish) -->
+  <path d="M75 75 L77.5 81 L84 81.5 L79.5 86 L81 92 L75 89 L69 92 L70.5 86 L66 81.5 L72.5 81 Z" fill="#FFDE03" />
+</svg>

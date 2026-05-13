@@ -31,7 +31,7 @@ class BookedEventsWidget implements IWidget {
 	}
 
 	public function getIconClass(): string {
-		return '';
+		return 'icon-booked-events-widget';
 	}
 
 	public function getUrl(): ?string {

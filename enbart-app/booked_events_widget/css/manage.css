@@ -39,7 +39,8 @@
 }
 
 .bew-manage .layout {
-	--panel-height: min(calc(100vh - 40px), 1180px);
+	--panel-height: min(calc(100vh - 112px), 1180px);
+	--panel-height: min(calc(100dvh - 112px), 1180px);
 	display: grid;
 	grid-template-columns: 280px minmax(0, 1fr);
 	gap: 22px;
@@ -179,6 +180,8 @@
 	display: grid;
 	grid-template-columns: 82px 1fr;
 	gap: 10px;
+	flex: 0 0 auto;
+	min-height: 94px;
 	background: var(--event-card-bg, #e6eff8);
 	border: 1px solid color-mix(in srgb, var(--event-card-border, #7a97d8) 28%, #0f2940 8%);
 	border-radius: 18px;
