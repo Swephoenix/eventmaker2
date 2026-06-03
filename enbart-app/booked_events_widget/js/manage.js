@@ -2214,6 +2214,7 @@
 
 		const formData = new FormData();
 		formData.append('document_file', file);
+		formData.append('requesttoken', requesttoken);
 
 		const response = await fetch(event.uploadDocumentUrl, {
 			method: 'POST',

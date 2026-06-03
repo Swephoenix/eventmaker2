@@ -33,6 +33,7 @@ $clientEvents = array_map(static function (array $event): array {
 		'location' => $location,
 		'description' => (string)$event['description'],
 		'link' => (string)$event['link'],
+		'internal_notes' => (string)($event['internal_notes'] ?? ''),
 		'isApi' => (bool)($event['is_api'] ?? false),
 		'isDemo' => false,
 		'sortOrder' => (int)$event['sort_order'],

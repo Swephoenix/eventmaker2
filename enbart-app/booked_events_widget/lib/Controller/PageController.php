@@ -14,7 +14,6 @@ use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\RedirectResponse;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\IRequest;
 use OCP\IURLGenerator;
 use OCP\IUser;
@@ -36,7 +35,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function index(): TemplateResponse {
 		$viewMode = (string)$this->request->getParam('mode', 'admin');
 		if ($viewMode !== 'eventpersonal') {
@@ -65,7 +63,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function state(): JSONResponse {
 		return new JSONResponse([
 			'events' => $this->buildClientEvents(),
@@ -74,7 +71,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function create(string $title, string $date, string $location, string $description = '', string $internal_notes = '', string $link = '', int $sort_order = 0): RedirectResponse {
 		$this->eventService->createEvent(
 			trim($title),
@@ -90,7 +86,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function update(int $id, string $title, string $date, string $location, string $description = '', string $internal_notes = '', string $link = '', int $sort_order = 0): RedirectResponse {
 		$this->eventService->updateEvent(
 			$id,
@@ -107,7 +102,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function saveStaff(int $id, string $staff_json = '[]'): RedirectResponse {
 		$staff = json_decode($staff_json, true);
 		if (!is_array($staff)) {
@@ -123,7 +117,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function saveChat(int $id, string $chat_json = '[]'): RedirectResponse {
 		$chat = json_decode($chat_json, true);
 		if (!is_array($chat)) {
@@ -139,7 +132,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function saveBudget(int $id, string $budget_json = '[]'): JSONResponse {
 		$budget = json_decode($budget_json, true);
 		if (!is_array($budget)) {
@@ -155,7 +147,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function uploadDocument(int $id): JSONResponse {
 		$files = $_FILES['document_file'] ?? null;
 		if (!is_array($files)) {
@@ -174,7 +165,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function deleteDocument(int $id, string $documentId): JSONResponse {
 		$this->eventService->deleteDocument($id, trim($documentId));
 
@@ -182,7 +172,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function downloadDocument(int $id, string $documentId): DataDisplayResponse|JSONResponse {
 		$payload = $this->eventService->getDocumentPayload($id, trim($documentId));
 		if ($payload === null) {
@@ -200,7 +189,6 @@ class PageController extends Controller {
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function delete(int $id): RedirectResponse {
 		$this->eventService->deleteEvent($id);
 

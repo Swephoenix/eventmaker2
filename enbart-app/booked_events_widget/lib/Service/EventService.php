@@ -73,6 +73,7 @@ class EventService {
 				'date' => (string)($event['date'] ?? ''),
 				'location' => (string)($event['location'] ?? ''),
 				'description' => (string)($event['description'] ?? ''),
+				'internal_notes' => (string)($event['internal_notes'] ?? ''),
 				'link' => (string)($event['link'] ?? ''),
 				'sort_order' => (int)($event['sort_order'] ?? 0),
 				'source' => (string)($event['source'] ?? $this->detectSource($event)),
@@ -93,6 +94,7 @@ class EventService {
 
 				$manualState['api_overrides'][$key] = array_filter([
 					'description' => (string)$normalizedEvent['description'],
+					'internal_notes' => (string)$normalizedEvent['internal_notes'],
 					'sort_order' => (int)$normalizedEvent['sort_order'],
 					'staff' => $normalizedEvent['staff'],
 					'documents' => $normalizedEvent['documents'],
@@ -865,6 +867,7 @@ class EventService {
 		file_put_contents(
 			$filePath,
 			(string)json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+			LOCK_EX,
 		);
 	}
 
@@ -1010,7 +1013,7 @@ class EventService {
 				$apiEvents[] = $apiEvent;
 
 				$override = [];
-				foreach (['description', 'sort_order', 'staff', 'documents', 'chat', 'budget'] as $field) {
+				foreach (['description', 'internal_notes', 'sort_order', 'staff', 'documents', 'chat', 'budget'] as $field) {
 					if (!array_key_exists($field, $event)) {
 						continue;
 					}
